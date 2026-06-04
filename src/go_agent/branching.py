@@ -79,6 +79,9 @@ def create_issue_branch(
     if existing:
         logger.warning("Branch %s already exists, checking out", branch_name)
         _git(["checkout", branch_name], repo_path)
+        base_sha = _git(["merge-base", branch_name, default_branch], repo_path)
+        if not _SHA_RE.match(base_sha):
+            raise BranchError(f"invalid merge-base SHA: {base_sha!r}")
     else:
         _git(["checkout", "-b", branch_name], repo_path)
         logger.info("Created branch %s from %s", branch_name, base_sha[:8])
