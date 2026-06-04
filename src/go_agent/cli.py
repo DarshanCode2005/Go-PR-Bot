@@ -10,6 +10,8 @@ from go_agent.config import get_settings
 from go_agent.constants import APPROVED_REPOS_HELP
 from go_agent.logging_config import configure_run_logging
 from go_agent.run_context import create_run_context
+from go_agent.branching import BranchError, create_issue_branch, write_branch_meta
+from go_agent.github_issues import IssueFetchError, fetch_issue_title
 from go_agent.workspace import CloneError, RepoNotAllowedError, assert_repo_allowed, ensure_repo_cloned
 
 _REPO_PATTERN = re.compile(r"^[\w.-]+/[\w.-]+$")
@@ -102,6 +104,24 @@ def run(
         raise typer.Exit(code=1) from exc
 
     logger.info("Repository ready at %s", repo_path)
+
+    try:
+        issue_title = fetch_issue_title(repo, issue, settings)
+        branch = create_issue_branch(repo_path, issue, issue_title, logger)
+        write_branch_meta(ctx, branch)
+        logger.info(
+            "Branch %s at base %s (default %s)",
+            branch.branch_name,
+            branch.base_sha[:8],
+            branch.default_branch,
+        )
+    except IssueFetchError as exc:
+        logger.error("%s", exc)
+        raise typer.Exit(code=1) from exc
+    except BranchError as exc:
+        logger.error("Branch creation failed: %s", exc)
+        raise typer.Exit(code=1) from exc
+
     logger.warning(
         "Pipeline not implemented yet: %s#%s dry_run=%s create_pr=%s",
         repo,
