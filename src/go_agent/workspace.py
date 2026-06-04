@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import shutil
 import subprocess
@@ -132,9 +133,27 @@ def _local_clone(source: Path, dest: Path) -> None:
 
 def _update_cache(repo: str, repo_url: str, remote_head: str, cache_dir: Path, logger: logging.Logger) -> None:
     logger.info("Updating cache for %s", repo)
-    _remove_path(cache_dir)
-    _shallow_clone(repo_url, cache_dir)
-    _write_cache_meta(cache_dir, repo, remote_head)
+    tmp_dir = cache_dir.with_name(f"{cache_dir.name}.tmp-{os.getpid()}")
+    _remove_path(tmp_dir)
+    try:
+        _shallow_clone(repo_url, tmp_dir)
+        _write_cache_meta(tmp_dir, repo, remote_head)
+        cache_dir.parent.mkdir(parents=True, exist_ok=True)
+        if cache_dir.exists():
+            old_dir = cache_dir.with_name(f"{cache_dir.name}.old-{os.getpid()}")
+            _remove_path(old_dir)
+            os.replace(cache_dir, old_dir)
+            try:
+                os.replace(tmp_dir, cache_dir)
+            except BaseException:
+                os.replace(old_dir, cache_dir)
+                raise
+            _remove_path(old_dir)
+        else:
+            os.replace(tmp_dir, cache_dir)
+    except BaseException:
+        _remove_path(tmp_dir)
+        raise
 
 
 def ensure_repo_cloned(
