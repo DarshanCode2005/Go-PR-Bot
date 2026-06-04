@@ -7,14 +7,13 @@ import logging
 import os
 import re
 import shutil
-import subprocess
 from pathlib import Path
 from typing import Any
 
 from go_agent.constants import APPROVED_REPOS, APPROVED_REPOS_HELP
+from go_agent.git_util import GitCommandError, run_git
 from go_agent.run_context import RunContext
 
-_GIT_TIMEOUT = 300
 _SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 
 
@@ -43,20 +42,9 @@ def github_url(repo: str) -> str:
 
 def _run_git(args: list[str], *, cwd: Path | None = None) -> str:
     try:
-        result = subprocess.run(
-            ["git", *args],
-            cwd=cwd,
-            capture_output=True,
-            text=True,
-            timeout=_GIT_TIMEOUT,
-            check=True,
-        )
-    except subprocess.CalledProcessError as exc:
-        stderr = (exc.stderr or "").strip()
-        raise CloneError(stderr or f"git {' '.join(args)} failed") from exc
-    except subprocess.TimeoutExpired as exc:
-        raise CloneError(f"git timed out after {_GIT_TIMEOUT}s") from exc
-    return result.stdout.strip()
+        return run_git(args, cwd=cwd)
+    except GitCommandError as exc:
+        raise CloneError(str(exc)) from exc
 
 
 def resolve_remote_head(repo_url: str) -> str:
