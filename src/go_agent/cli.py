@@ -2,9 +2,35 @@
 
 from __future__ import annotations
 
+import re
+
 import typer
 
-app = typer.Typer(help="Agentic AI contributor for approved Go OSS projects.")
+from go_agent.constants import APPROVED_REPOS, APPROVED_REPOS_HELP
+
+_REPO_PATTERN = re.compile(r"^[\w.-]+/[\w.-]+$")
+
+_EPILOG = f"Approved repos: {APPROVED_REPOS_HELP}"
+
+app = typer.Typer(
+    help="Agentic AI contributor for approved Go OSS projects.",
+    no_args_is_help=True,
+    epilog=_EPILOG,
+)
+
+
+def _validate_repo(repo: str) -> str:
+    if not _REPO_PATTERN.match(repo):
+        raise typer.BadParameter(
+            "expected owner/name, e.g. gin-gonic/gin",
+            param_hint="--repo",
+        )
+    if repo not in APPROVED_REPOS:
+        typer.echo(
+            f"Warning: {repo!r} is not in the assignment allowlist ({APPROVED_REPOS_HELP}).",
+            err=True,
+        )
+    return repo
 
 
 @app.command()
@@ -15,17 +41,53 @@ def version() -> None:
     typer.echo(__version__)
 
 
-@app.command()
+@app.command(
+    epilog=_EPILOG,
+    context_settings={"help_option_names": ["-h", "--help"]},
+)
 def run(
-    repo: str = typer.Option(..., help="owner/name e.g. gin-gonic/gin"),
-    issue: int = typer.Option(..., help="GitHub issue number"),
-    dry_run: bool = typer.Option(True, help="No git push / PR create"),
-    create_pr: bool = typer.Option(False, help="Open draft PR via gh"),
+    repo: str = typer.Option(
+        ...,
+        "--repo",
+        help=f"GitHub owner/name; approved: {APPROVED_REPOS_HELP}",
+        callback=_validate_repo,
+    ),
+    issue: int = typer.Option(..., "--issue", help="GitHub issue number"),
+    dry_run: bool = typer.Option(
+        True,
+        "--dry-run/--no-dry-run",
+        help="Skip git push and PR creation (default: true)",
+    ),
+    create_pr: bool = typer.Option(
+        False,
+        "--create-pr",
+        help="Open draft PR via gh (requires --no-dry-run)",
+    ),
 ) -> None:
-    """Run the agent pipeline on a GitHub issue."""
-    typer.echo(f"Not implemented yet: {repo}#{issue} dry_run={dry_run} create_pr={create_pr}")
+    """Run the agent pipeline on a GitHub issue.
+
+    Example:
+
+        go-agent run --repo gin-gonic/gin --issue 1234 --dry-run
+    """
+    if create_pr and dry_run:
+        typer.echo(
+            "Error: --create-pr requires --no-dry-run.",
+            err=True,
+        )
+        raise typer.Exit(code=2)
+
+    typer.echo(
+        f"Pipeline not implemented yet: {repo}#{issue} "
+        f"dry_run={dry_run} create_pr={create_pr}",
+        err=True,
+    )
     raise typer.Exit(code=1)
 
 
-if __name__ == "__main__":
+def main() -> None:
     app()
+
+
+if __name__ == "__main__":
+    main()
