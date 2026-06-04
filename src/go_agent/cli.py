@@ -7,9 +7,10 @@ import re
 import typer
 
 from go_agent.config import get_settings
-from go_agent.constants import APPROVED_REPOS, APPROVED_REPOS_HELP
+from go_agent.constants import APPROVED_REPOS_HELP
 from go_agent.logging_config import configure_run_logging
 from go_agent.run_context import create_run_context
+from go_agent.workspace import CloneError, RepoNotAllowedError, assert_repo_allowed, ensure_repo_cloned
 
 _REPO_PATTERN = re.compile(r"^[\w.-]+/[\w.-]+$")
 
@@ -28,11 +29,10 @@ def _validate_repo(repo: str) -> str:
             "expected owner/name, e.g. gin-gonic/gin",
             param_hint="--repo",
         )
-    if repo not in APPROVED_REPOS:
-        typer.echo(
-            f"Warning: {repo!r} is not in the assignment allowlist ({APPROVED_REPOS_HELP}).",
-            err=True,
-        )
+    try:
+        assert_repo_allowed(repo)
+    except RepoNotAllowedError as exc:
+        raise typer.BadParameter(str(exc), param_hint="--repo") from exc
     return repo
 
 
@@ -91,6 +91,17 @@ def run(
         create_pr,
         ctx.artifact_dir,
     )
+
+    try:
+        repo_path = ensure_repo_cloned(repo, ctx, logger)
+    except RepoNotAllowedError as exc:
+        logger.error("%s", exc)
+        raise typer.Exit(code=2) from exc
+    except CloneError as exc:
+        logger.error("Clone failed: %s", exc)
+        raise typer.Exit(code=1) from exc
+
+    logger.info("Repository ready at %s", repo_path)
     logger.warning(
         "Pipeline not implemented yet: %s#%s dry_run=%s create_pr=%s",
         repo,
