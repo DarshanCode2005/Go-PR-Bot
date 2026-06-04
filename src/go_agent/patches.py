@@ -66,9 +66,9 @@ def _git_apply(repo_path: Path, patch_path: Path) -> None:
         try:
             run_git(args, cwd=repo_path)
         except GitCommandError as exc:
-            phase = "check" if check_only else "apply"
+            flag = "--check " if check_only else ""
             raise PatchApplyError(
-                f"git apply --{phase} failed: {exc}. "
+                f"git apply {flag}failed: {exc}. "
                 f"Inspect the patch and run `git apply --check` in {repo_path}."
             ) from exc
 
