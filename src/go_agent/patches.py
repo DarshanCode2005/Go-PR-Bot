@@ -89,10 +89,10 @@ def commit_all(repo_path: Path, message: str) -> str:
 
 
 def export_changes_patch(repo_path: Path, base_sha: str, dest: Path) -> Path:
-    """Write git diff from base_sha to HEAD to dest."""
+    """Write git diff from base_sha to the index/working tree to dest."""
     try:
         result = subprocess.run(
-            ["git", "diff", f"{base_sha}..HEAD"],
+            ["git", "diff", base_sha],
             cwd=repo_path,
             capture_output=True,
             text=True,
@@ -112,6 +112,10 @@ def export_changes_patch(repo_path: Path, base_sha: str, dest: Path) -> Path:
     return dest
 
 
+def _reset_working_tree(repo_path: Path) -> None:
+    run_git(["reset", "--hard", "HEAD"], cwd=repo_path)
+
+
 def apply_patch_and_commit(
     repo_path: Path,
     ctx: RunContext,
@@ -122,11 +126,33 @@ def apply_patch_and_commit(
     logger: logging.Logger,
 ) -> PatchResult:
     """Apply patch, commit with standard message, and export changes.patch."""
-    apply_unified_patch(repo_path, patch)
-    message = format_commit_message(summary, issue_number)
-    commit_sha = commit_all(repo_path, message)
     changes_path = ctx.artifact_dir / "changes.patch"
-    export_changes_patch(repo_path, base_sha, changes_path)
+    message = format_commit_message(summary, issue_number)
+    head = run_git(["rev-parse", "HEAD"], cwd=repo_path)
+
+    if head != base_sha:
+        if not changes_path.exists():
+            logger.warning(
+                "Branch already has commits beyond %s; re-exporting changes.patch",
+                base_sha[:8],
+            )
+            export_changes_patch(repo_path, base_sha, changes_path)
+        commit_message = run_git(["log", "-1", "--format=%s"], cwd=repo_path)
+        logger.info("Branch already at %s; using existing commit", head[:8])
+        return PatchResult(
+            commit_sha=head,
+            commit_message=commit_message,
+            changes_patch_path=changes_path,
+        )
+
+    try:
+        apply_unified_patch(repo_path, patch)
+        run_git(["add", "-A"], cwd=repo_path)
+        export_changes_patch(repo_path, base_sha, changes_path)
+        commit_sha = commit_all(repo_path, message)
+    except PatchApplyError:
+        _reset_working_tree(repo_path)
+        raise
 
     if not changes_path.read_text(encoding="utf-8").strip():
         logger.warning("changes.patch is empty for base %s", base_sha[:8])

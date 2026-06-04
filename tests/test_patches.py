@@ -115,6 +115,56 @@ def test_export_changes_patch(tmp_path, monkeypatch, bare_repo_url: str):
     assert "+v2" in content
 
 
+def test_export_failure_leaves_no_commit(tmp_path, monkeypatch, bare_repo_url: str):
+    monkeypatch.chdir(tmp_path)
+    ctx, repo_path, branch, logger = _setup_repo(tmp_path, bare_repo_url)
+    head_before = run_git(["rev-parse", "HEAD"], cwd=repo_path)
+
+    with patch(
+        "go_agent.patches.export_changes_patch",
+        side_effect=PatchApplyError("git diff timed out"),
+    ):
+        with pytest.raises(PatchApplyError, match="git diff timed out"):
+            apply_patch_and_commit(
+                repo_path,
+                ctx,
+                README_PATCH,
+                42,
+                "Update readme",
+                branch.base_sha,
+                logger,
+            )
+
+    assert run_git(["rev-parse", "HEAD"], cwd=repo_path) == head_before
+    assert (repo_path / "README.md").read_text(encoding="utf-8") == "v1\n"
+    assert not (ctx.artifact_dir / "changes.patch").exists()
+
+
+def test_recovers_orphaned_commit_when_export_failed(
+    tmp_path, monkeypatch, bare_repo_url: str
+):
+    monkeypatch.chdir(tmp_path)
+    ctx, repo_path, branch, logger = _setup_repo(tmp_path, bare_repo_url)
+
+    apply_unified_patch(repo_path, README_PATCH)
+    run_git(["commit", "-am", "orphaned commit"], cwd=repo_path)
+    commit_sha = run_git(["rev-parse", "HEAD"], cwd=repo_path)
+
+    result = apply_patch_and_commit(
+        repo_path,
+        ctx,
+        README_PATCH,
+        42,
+        "Update readme",
+        branch.base_sha,
+        logger,
+    )
+
+    assert result.commit_sha == commit_sha
+    assert result.changes_patch_path.exists()
+    assert "+v2" in result.changes_patch_path.read_text(encoding="utf-8")
+
+
 def test_cli_patch_file(tmp_path, monkeypatch, bare_repo_url: str):
     monkeypatch.setenv("GO_AGENT_ARTIFACTS_DIR", str(tmp_path / "artifacts"))
     monkeypatch.setenv("GO_AGENT_WORK_DIR", str(tmp_path / "workspaces"))
