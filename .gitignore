@@ -10,3 +10,6 @@ artifacts/
 .ruff_cache/
 checkpoints/
 .chroma/
+.gitignore
+docs/
+scripts/
