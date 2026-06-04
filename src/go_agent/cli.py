@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from pathlib import Path
 
 import typer
 
@@ -12,6 +13,7 @@ from go_agent.logging_config import configure_run_logging
 from go_agent.run_context import create_run_context
 from go_agent.branching import BranchError, create_issue_branch, write_branch_meta
 from go_agent.github_issues import IssueFetchError, fetch_issue_title
+from go_agent.patches import PatchApplyError, apply_patch_and_commit
 from go_agent.workspace import CloneError, RepoNotAllowedError, assert_repo_allowed, ensure_repo_cloned
 
 _REPO_PATTERN = re.compile(r"^[\w.-]+/[\w.-]+$")
@@ -68,6 +70,13 @@ def run(
         "--create-pr",
         help="Open draft PR via gh (requires --no-dry-run)",
     ),
+    patch_file: Path | None = typer.Option(
+        None,
+        "--patch-file",
+        help="Apply unified diff from file and commit (dev/testing)",
+        exists=True,
+        readable=True,
+    ),
 ) -> None:
     """Run the agent pipeline on a GitHub issue.
 
@@ -121,6 +130,27 @@ def run(
     except BranchError as exc:
         logger.error("Branch creation failed: %s", exc)
         raise typer.Exit(code=1) from exc
+
+    if patch_file is not None:
+        try:
+            patch_text = patch_file.read_text(encoding="utf-8")
+            result = apply_patch_and_commit(
+                repo_path,
+                ctx,
+                patch_text,
+                issue,
+                issue_title[:50],
+                branch.base_sha,
+                logger,
+            )
+            logger.info(
+                "Patch applied; commit %s; changes at %s",
+                result.commit_sha[:8],
+                result.changes_patch_path,
+            )
+        except PatchApplyError as exc:
+            logger.error("Patch apply failed: %s", exc)
+            raise typer.Exit(code=1) from exc
 
     logger.warning(
         "Pipeline not implemented yet: %s#%s dry_run=%s create_pr=%s",
