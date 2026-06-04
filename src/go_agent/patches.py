@@ -78,6 +78,7 @@ def commit_all(repo_path: Path, message: str) -> str:
     try:
         run_git(["add", "-A"], cwd=repo_path)
         run_git(["commit", "-m", message], cwd=repo_path)
+        return run_git(["rev-parse", "HEAD"], cwd=repo_path)
     except GitCommandError as exc:
         err = str(exc).lower()
         if "nothing to commit" in err or "no changes added to commit" in err:
@@ -85,7 +86,6 @@ def commit_all(repo_path: Path, message: str) -> str:
                 "nothing to commit after applying patch; patch may not modify tracked files"
             ) from exc
         raise PatchApplyError(f"git commit failed: {exc}") from exc
-    return run_git(["rev-parse", "HEAD"], cwd=repo_path)
 
 
 def export_changes_patch(repo_path: Path, base_sha: str, dest: Path) -> Path:
