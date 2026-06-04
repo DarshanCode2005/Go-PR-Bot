@@ -6,7 +6,10 @@ import re
 
 import typer
 
+from go_agent.config import get_settings
 from go_agent.constants import APPROVED_REPOS, APPROVED_REPOS_HELP
+from go_agent.logging_config import configure_run_logging
+from go_agent.run_context import create_run_context
 
 _REPO_PATTERN = re.compile(r"^[\w.-]+/[\w.-]+$")
 
@@ -77,10 +80,23 @@ def run(
         )
         raise typer.Exit(code=2)
 
-    typer.echo(
-        f"Pipeline not implemented yet: {repo}#{issue} "
-        f"dry_run={dry_run} create_pr={create_pr}",
-        err=True,
+    settings = get_settings()
+    ctx = create_run_context(settings)
+    logger = configure_run_logging(ctx)
+    logger.info(
+        "Starting run repo=%s issue=%s dry_run=%s create_pr=%s artifact_dir=%s",
+        repo,
+        issue,
+        dry_run,
+        create_pr,
+        ctx.artifact_dir,
+    )
+    logger.warning(
+        "Pipeline not implemented yet: %s#%s dry_run=%s create_pr=%s",
+        repo,
+        issue,
+        dry_run,
+        create_pr,
     )
     raise typer.Exit(code=1)
 

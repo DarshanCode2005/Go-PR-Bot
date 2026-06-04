@@ -13,7 +13,7 @@ pip install -e ".[dev]"
 
 # Configure
 cp .env.example .env
-# Edit .env with your LLM provider and GitHub token
+# Edit .env with your LLM provider, GitHub token, and optional GO_AGENT_LOG_LEVEL (DEBUG|INFO|WARNING|ERROR)
 
 # Run on an issue (dry-run: no PR)
 go-agent run --repo gin-gonic/gin --issue 1234 --dry-run
