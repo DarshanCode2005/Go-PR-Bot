@@ -120,27 +120,60 @@ flowchart TB
 
 ## Closed-loop state machine
 
+The **conceptual** end-state includes parallel coders, an integrator node, and a separate lint step. Those are implemented in the imperative CLI today (`coder.py`, `integrator.py`) and will be wired into LangGraph in later issues.
+
+The **implemented stub graph** lives in `go_agent.orchestrator` (see [LangGraph orchestrator (code)](#langgraph-orchestrator-code) below). State is defined in `orchestrator/state.py`:
+
 ```python
-# Conceptual LangGraph state (TypedDict)
-class AgentState(TypedDict):
-    issue: dict
-    repo_path: str
-    plan: dict
-    patches: list[str]
+# AgentState (TypedDict) + Pydantic sub-models TestResult, ReviewResult
+class AgentState(TypedDict, total=False):
+    run_id: str
+    repo: str
+    issue_number: int
+    status: Literal["planning", "coding", "testing", "fixing", "reviewing", "shipping", "done", "failed"]
     iteration: int
-    test_result: TestResult  # passed, output, cmd
-    lint_result: LintResult
-    review: ReviewResult
-    pr_summary: dict
-    status: Literal["planning", "coding", "testing", "reviewing", "done", "failed"]
+    last_node: str
+    test_result: dict[str, Any]   # TestResult.model_dump()
+    review: dict[str, Any]        # ReviewResult.model_dump()
+    error: str | None
 ```
 
-Edges:
+Conceptual edges (full system, not all nodes in stub graph yet):
+
 - `plan` → `code` (parallel map) → `integrate` → `test`
 - `test` → `fix` if fail and iteration < max → `integrate`
 - `test` → `lint` if pass
 - `lint` → `fix` if fail …
 - `lint` → `review` → `fix` OR `pr` → END
+
+---
+
+## LangGraph orchestrator (code)
+
+Module: [`src/go_agent/orchestrator/`](../src/go_agent/orchestrator/)
+
+Stub nodes: `plan`, `code`, `test`, `fix`, `review`, `pr`. Node functions return partial state updates only; real agent calls are wired in a later issue. Fix-loop cap uses `GO_AGENT_MAX_FIX_ITERATIONS` (default 5).
+
+```mermaid
+flowchart TB
+  plan --> code
+  code --> test
+  test -->|"fail and iteration lt max"| fix
+  test -->|pass or max iterations| review
+  fix --> code
+  review --> pr
+  pr --> endNode["END"]
+```
+
+Routing from `test`:
+
+| Condition | Next node |
+|-----------|-----------|
+| `test_result.passed` is true | `review` |
+| failed and `iteration < max_fix_iterations` | `fix` |
+| failed and `iteration >= max_fix_iterations` | `review` (status `failed`) |
+
+`fix` increments `iteration` and always returns to `code`.
 
 ---
 
