@@ -67,7 +67,7 @@ def _build_rg_args(
         "--line-number",
         "--no-heading",
         "--fixed-strings",
-        "--max-total-count",
+        "--max-count",
         str(max_results),
     ]
     if glob_pattern:

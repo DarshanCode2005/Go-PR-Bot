@@ -113,7 +113,7 @@ def test_search_repo_truncated(tmp_path):
             response = search_repo(repo, "line", Settings(ripgrep_max_results=1))
 
     assert response.truncated is True
-    assert "--max-total-count" in run.call_args[0][0]
+    assert "--max-count" in run.call_args[0][0]
 
 
 def test_search_repo_caps_total_hits_across_files(tmp_path):
