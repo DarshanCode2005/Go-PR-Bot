@@ -575,7 +575,7 @@ def build_proposed_patch(
                 for future in as_completed(futures):
                     path = futures[future]
                     completed[path] = future.result()
-            except CoderError:
+            except Exception:
                 for pending in futures:
                     pending.cancel()
                 raise
