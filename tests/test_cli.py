@@ -1,6 +1,7 @@
 from typer.testing import CliRunner
 
 from go_agent.cli import app
+from helpers import enable_planner_mock
 
 runner = CliRunner()
 
@@ -59,9 +60,7 @@ def test_run_create_pr_conflicts_dry_run():
 def test_run_not_implemented(tmp_path, monkeypatch):
     monkeypatch.setenv("GO_AGENT_ARTIFACTS_DIR", str(tmp_path / "artifacts"))
     monkeypatch.setenv("GO_AGENT_WORK_DIR", str(tmp_path / "workspaces"))
-    from go_agent.config import clear_settings_cache
-
-    clear_settings_cache()
+    enable_planner_mock(monkeypatch)
     result = runner.invoke(app, ["run", "--repo", "gin-gonic/gin", "--issue", "1"])
     assert result.exit_code == 1
     assert "not implemented" in (result.stdout + result.stderr).lower()

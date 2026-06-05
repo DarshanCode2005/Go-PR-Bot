@@ -23,6 +23,7 @@ Step-by-step record of what was built for each backlog item in [Go-PR-Bot](https
 | #13 Context builder | [#14](https://github.com/DarshanCode2005/Go-PR-Bot/issues/14) | Done |
 | #14 RAG retrieval | [#15](https://github.com/DarshanCode2005/Go-PR-Bot/issues/15) | Done |
 | #15 LLM client wrapper | [#16](https://github.com/DarshanCode2005/Go-PR-Bot/issues/16) | Done |
+| #16 Planner agent | [#17](https://github.com/DarshanCode2005/Go-PR-Bot/issues/17) | Done |
 
 ---
 
@@ -44,6 +45,7 @@ go-agent run --repo <owner/name> --issue <N>
   ├─ prepare_scope() + ripgrep search     → scope_hints.json + search_hits.json
   ├─ [optional --rag] semantic retrieval  → rag_hits.json merged into search hits
   ├─ build_context_bundle()             → code_graph.json + context_bundle.json
+  ├─ build_fix_plan()                   → plan.json (fails run if planner cannot complete)
   ├─ create_issue_branch()         → agent/issue-{N}-{slug}
   ├─ write_branch_meta()           → branch_meta.json
   ├─ [optional] apply_patch_and_commit()  → --patch-file dev path
@@ -55,7 +57,7 @@ go-agent run --repo <owner/name> --issue <N>
 
 **Approved repos:** `gin-gonic/gin`, `spf13/cobra`, `go-playground/validator`, `golangci/golangci-lint`
 
-**Test suite:** 119 tests, `pytest -q && ruff check src tests`
+**Test suite:** 126 tests, `pytest -q && ruff check src tests`
 
 ---
 
@@ -74,6 +76,7 @@ All artifacts live under `artifacts/{run_id}/`:
 | `rag_hits.json` | Backlog #14 | Semantic RAG hits (when `--rag`); merged into bundle seeds |
 | `code_graph.json` | Backlog #13 | In-memory code graph: nodes, edges, seeds |
 | `context_bundle.json` | Backlog #13 | Ranked files with tiered content under char budget |
+| `plan.json` | Backlog #16 | Structured fix plan: files, steps, test_commands, acceptance_criteria |
 | `branch_meta.json` | Backlog #5 | branch name, base SHA, default branch, issue info |
 | `changes.patch` | Backlog #6 | `git diff` from base SHA (when `--patch-file` used) |
 | `PR.md` | Backlog #9 | Draft PR title/body: Problem, Solution, Test plan, Fixes #N |
@@ -102,6 +105,7 @@ Shared cache: `workspaces/_cache/{owner__repo}/` (shallow clone + `meta.json` + 
 | `github_issues.py` | Fetch and model issue metadata |
 | `issue_scope.py` | Heuristic + optional LLM scope hint extraction |
 | `llm_client.py` | Shared LiteLLM `complete()` with model tier routing and retries |
+| `planner.py` | Strong-tier planner; Pydantic `FixPlan`; writes `plan.json` |
 | `context_builder.py` | Stub: `prepare_scope`, `write_scope_hints` |
 | `pr_writer.py` | PR draft template + optional LLM; writes `PR.md` |
 | `github_pr.py` | Push branch + `gh pr create --draft`; writes `pr_meta.json` |
@@ -917,6 +921,68 @@ pytest -q && ruff check src tests
 
 ---
 
+### Backlog #16 — Planner agent (structured plan.json)
+
+**GitHub:** [#17](https://github.com/DarshanCode2005/Go-PR-Bot/issues/17)  
+**Commit:** (pending) `feat(planner): structured fix plan with Pydantic validation and plan.json artifact (fixes #17)`  
+**PR:** (pending)
+
+#### What was built
+
+**`planner.py`**
+
+- `FixPlan` Pydantic model: `files`, `steps`, `test_commands`, `acceptance_criteria`
+- Field validators: non-empty lists, deduped files, at least one `go test` command
+- `build_planner_messages()` — issue + scope hints + context bundle excerpts + repo skill
+- `build_fix_plan()` — `complete(..., tier="strong")`; JSON parse + validate; one retry on failure
+- `write_plan()` → `plan.json`
+- `PlanError` — run fails when planner cannot complete (integral step)
+
+**`cli.py`**
+
+- Planner runs after context bundle, before branch creation
+- `PlanError` caught with exit code 1
+
+**`tests/helpers.py`**
+
+- `enable_planner_mock()` — mock transport for CLI integration tests
+
+#### Key decisions
+
+- Planner is mandatory: no heuristic fallback when LLM/validation fails
+- First production use of `model_strong` tier
+- Repo skills loaded from `skills/{owner__repo}/SKILL.md` with `_default` fallback
+
+#### Tests
+
+- `tests/test_planner.py` — validation, API key required, parse, retry, strong tier, artifact
+- CLI integration tests updated with `enable_planner_mock()`
+
+#### CLI integration
+
+```python
+fix_plan = build_fix_plan(issue_ctx, context_bundle, scope_bundle.scope_hints, settings, logger=logger)
+write_plan(ctx, fix_plan)
+```
+
+#### Dependencies on prior issues
+
+- Backlog #13 — `context_bundle.json` input
+- Backlog #15 — `llm_client.complete()` with strong tier
+
+#### Out of scope
+
+- LangGraph orchestrator node wiring
+- Coder/reviewer consumption of `plan.json`
+
+#### Verification
+
+```bash
+pytest -q && ruff check src tests
+```
+
+---
+
 ## Template for future issues
 
 Copy this block when appending the next implemented issue.
@@ -998,4 +1064,4 @@ See `.env.example` and `config.py`. Minimum for current pipeline:
 
 ---
 
-*Last updated: after Backlog #15 (GitHub #16) — unified LiteLLM completion client.*
+*Last updated: after Backlog #16 (GitHub #17) — planner agent and plan.json artifact.*

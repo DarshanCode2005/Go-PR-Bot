@@ -23,6 +23,7 @@ from go_agent.github_pr import (
     write_pr_meta,
 )
 from go_agent.logging_config import configure_run_logging
+from helpers import enable_planner_mock
 from go_agent.patches import apply_patch_and_commit
 from go_agent.pr_writer import build_pr_template
 from go_agent.run_context import create_run_context
@@ -179,6 +180,7 @@ def test_write_pr_meta(tmp_path, monkeypatch):
 def test_dry_run_does_not_call_gh(tmp_path, monkeypatch, bare_repo_url: str):
     monkeypatch.setenv("GO_AGENT_ARTIFACTS_DIR", str(tmp_path / "artifacts"))
     monkeypatch.setenv("GO_AGENT_WORK_DIR", str(tmp_path / "workspaces"))
+    enable_planner_mock(monkeypatch)
 
     issue_ctx = IssueContext(
         repo=TEST_REPO,
@@ -200,6 +202,7 @@ def test_dry_run_does_not_call_gh(tmp_path, monkeypatch, bare_repo_url: str):
 def test_create_pr_path_calls_gh(tmp_path, monkeypatch, bare_repo_url: str):
     monkeypatch.setenv("GO_AGENT_ARTIFACTS_DIR", str(tmp_path / "artifacts"))
     monkeypatch.setenv("GO_AGENT_WORK_DIR", str(tmp_path / "workspaces"))
+    enable_planner_mock(monkeypatch)
 
     patch_path = tmp_path / "fix.patch"
     patch_path.write_text(README_PATCH, encoding="utf-8")

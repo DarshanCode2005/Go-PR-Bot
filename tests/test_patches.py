@@ -23,6 +23,7 @@ from go_agent.patches import (
 )
 from go_agent.run_context import create_run_context
 from go_agent.workspace import ensure_repo_cloned
+from helpers import enable_planner_mock
 
 TEST_REPO = APPROVED_REPOS[0]
 runner = CliRunner()
@@ -169,6 +170,7 @@ def test_recovers_orphaned_commit_when_export_failed(
 def test_cli_patch_file(tmp_path, monkeypatch, bare_repo_url: str):
     monkeypatch.setenv("GO_AGENT_ARTIFACTS_DIR", str(tmp_path / "artifacts"))
     monkeypatch.setenv("GO_AGENT_WORK_DIR", str(tmp_path / "workspaces"))
+    enable_planner_mock(monkeypatch)
 
     patch_path = tmp_path / "fix.patch"
     patch_path.write_text(README_PATCH, encoding="utf-8")

@@ -6,6 +6,8 @@ from typer.testing import CliRunner
 from go_agent.cli import app
 from go_agent.config import clear_settings_cache
 from go_agent.github_issues import IssueContext
+from go_agent.llm_client import set_completion_transport
+from helpers import enable_planner_mock
 
 runner = CliRunner()
 
@@ -13,13 +15,16 @@ runner = CliRunner()
 @pytest.fixture(autouse=True)
 def _clear_settings_cache():
     clear_settings_cache()
+    set_completion_transport(None)
     yield
+    set_completion_transport(None)
     clear_settings_cache()
 
 
 def test_run_writes_branch_meta(tmp_path, monkeypatch, bare_repo_url: str):
     monkeypatch.setenv("GO_AGENT_ARTIFACTS_DIR", str(tmp_path / "artifacts"))
     monkeypatch.setenv("GO_AGENT_WORK_DIR", str(tmp_path / "workspaces"))
+    enable_planner_mock(monkeypatch)
 
     issue_ctx = IssueContext(
         repo="gin-gonic/gin",
