@@ -20,6 +20,7 @@ from go_agent.github_issues import (
     fetch_issue_context,
     write_issue_context,
 )
+from go_agent.github_pr import PRCreateError, maybe_create_pr
 from go_agent.patches import PatchApplyError, apply_patch_and_commit
 from go_agent.pr_writer import build_pr_draft, write_pr_md
 from go_agent.workspace import CloneError, RepoNotAllowedError, assert_repo_allowed, ensure_repo_cloned
@@ -193,6 +194,23 @@ def run(
     )
     pr_path = write_pr_md(ctx, pr_draft)
     logger.info("PR draft written to %s", pr_path)
+
+    if not dry_run and create_pr:
+        try:
+            pr_result = maybe_create_pr(
+                repo_path,
+                repo,
+                branch,
+                pr_draft,
+                ctx,
+                logger,
+            )
+            typer.echo(pr_result.url)
+            logger.info("Draft PR created: %s", pr_result.url)
+            raise typer.Exit(code=0)
+        except PRCreateError as exc:
+            logger.error("%s", exc)
+            raise typer.Exit(code=1) from exc
 
     logger.warning(
         "Pipeline not implemented yet: %s#%s dry_run=%s create_pr=%s",

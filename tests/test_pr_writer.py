@@ -11,6 +11,7 @@ from go_agent.pr_writer import (
     PRDraft,
     build_pr_draft,
     build_pr_template,
+    render_pr_body,
     render_pr_markdown,
     write_pr_md,
 )
@@ -95,6 +96,22 @@ def test_render_pr_markdown_sections():
     assert "## Solution" in rendered
     assert "## Test plan" in rendered
     assert "Fixes #1" in rendered
+
+
+def test_render_pr_body_excludes_title():
+    draft = PRDraft(
+        title="fix: Example (fixes #1)",
+        problem="Something broke.",
+        solution="Fix the bug.",
+        test_plan="- [ ] go test ./... -count=1",
+        issue_number=1,
+        repo="owner/repo",
+    )
+    body = render_pr_body(draft)
+    assert not body.startswith("# ")
+    assert "## Problem" in body
+    assert "Fixes #1" in body
+    assert render_pr_markdown(draft).startswith(f"# {draft.title}")
 
 
 def test_write_pr_md_creates_artifact(tmp_path, monkeypatch):

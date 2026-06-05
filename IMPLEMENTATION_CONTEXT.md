@@ -17,7 +17,7 @@ Step-by-step record of what was built for each backlog item in [Go-PR-Bot](https
 | #7 Fetch issue metadata | [#8](https://github.com/DarshanCode2005/Go-PR-Bot/issues/8) | Done |
 | #8 Scope hints | [#9](https://github.com/DarshanCode2005/Go-PR-Bot/issues/9) | Done |
 | #9 PR generator | [#10](https://github.com/DarshanCode2005/Go-PR-Bot/issues/10) | Done |
-| … | … | … |
+| #10 Create PR via gh | [#11](https://github.com/DarshanCode2005/Go-PR-Bot/issues/11) | Done |
 
 ---
 
@@ -40,12 +40,14 @@ go-agent run --repo <owner/name> --issue <N>
   ├─ write_branch_meta()           → branch_meta.json
   ├─ [optional] apply_patch_and_commit()  → --patch-file dev path
   ├─ build_pr_draft() + write_pr_md()    → PR.md
-  └─ exit 1 — "Pipeline not implemented yet"
+  ├─ [optional] maybe_create_pr()        → --no-dry-run --create-pr only
+  │     push branch + gh pr create --draft → pr_meta.json, exit 0
+  └─ exit 1 — "Pipeline not implemented yet" (dry-run default)
 ```
 
 **Approved repos:** `gin-gonic/gin`, `spf13/cobra`, `go-playground/validator`, `golangci/golangci-lint`
 
-**Test suite:** 60 tests, `pytest -q && ruff check src tests`
+**Test suite:** 69 tests, `pytest -q && ruff check src tests`
 
 ---
 
@@ -62,6 +64,7 @@ All artifacts live under `artifacts/{run_id}/`:
 | `branch_meta.json` | Backlog #5 | branch name, base SHA, default branch, issue info |
 | `changes.patch` | Backlog #6 | `git diff` from base SHA (when `--patch-file` used) |
 | `PR.md` | Backlog #9 | Draft PR title/body: Problem, Solution, Test plan, Fixes #N |
+| `pr_meta.json` | Backlog #10 | Draft PR URL, title, branch (when `--create-pr`) |
 
 Workspace clone: `workspaces/{run_id}/repo`
 
@@ -87,6 +90,7 @@ Shared cache: `workspaces/_cache/{owner__repo}/` (shallow clone + `meta.json`)
 | `issue_scope.py` | Heuristic + optional LLM scope hint extraction |
 | `context_builder.py` | Stub: `prepare_scope`, `write_scope_hints` |
 | `pr_writer.py` | PR draft template + optional LLM; writes `PR.md` |
+| `github_pr.py` | Push branch + `gh pr create --draft`; writes `pr_meta.json` |
 
 ---
 
@@ -487,6 +491,70 @@ pytest -q && ruff check src tests
 
 ---
 
+### Backlog #10 — Create PR via gh (optional path)
+
+**GitHub:** [#11](https://github.com/DarshanCode2005/Go-PR-Bot/issues/11)  
+**Commit:** (pending) `feat(github): create draft PR via gh when --create-pr (fixes #11)`  
+**PR:** (pending)
+
+#### What was built
+
+**`github_pr.py`**
+
+- `PRResult` — url, title, branch_name
+- `count_commits_ahead()` — validates branch has commits beyond base SHA
+- `push_branch()` — `git push -u origin {branch}`
+- `create_draft_pr()` — `gh pr create --draft --repo ... --base ... --head ... --title ... --body ...`
+- `write_pr_meta()` → `pr_meta.json`
+- `maybe_create_pr()` — orchestrates push + create + meta artifact
+
+**`pr_writer.py`**
+
+- `render_pr_body()` — PR body without H1 title for `gh pr create`
+- `render_pr_markdown()` refactored to compose title + body
+
+#### Key decisions
+
+- Gated by `not dry_run and create_pr` — dry-run never calls `gh` or push
+- Requires commits ahead of base; clear error if branch is empty
+- On success: echo PR URL to stdout, log, exit 0
+- Push targets `origin` from clone; fork remote config out of scope
+
+#### Tests
+
+- `tests/test_github_pr.py` — commit count, push, gh URL parse, no commits error, dry-run skip, create-pr path
+- `tests/test_pr_writer.py` — `render_pr_body` excludes title
+
+#### CLI integration
+
+After `write_pr_md`, when `--no-dry-run --create-pr`:
+
+```python
+pr_result = maybe_create_pr(repo_path, repo, branch, pr_draft, ctx, logger)
+typer.echo(pr_result.url)
+raise typer.Exit(code=0)
+```
+
+#### Dependencies on prior issues
+
+- Backlog #9 — `PRDraft` and `PR.md`
+- Backlog #5 — branch name and base SHA
+- Backlog #6 — commits on branch (via patch or future agent)
+
+#### Out of scope
+
+- Fork/upstream remote configuration
+- Non-draft PRs
+- Push when `--no-dry-run` without `--create-pr`
+
+#### Verification
+
+```bash
+pytest -q && ruff check src tests
+```
+
+---
+
 ## Template for future issues
 
 Copy this block when appending the next implemented issue.
@@ -541,9 +609,9 @@ pytest -q && ruff check src tests
 |------|---------|---------|
 | `--repo` | required | `owner/name`, must be allowlisted |
 | `--issue` | required | GitHub issue number |
-| `--dry-run` | true | Skip push/PR (PR not implemented yet) |
-| `--no-dry-run` | — | Required for future PR creation |
-| `--create-pr` | false | Open draft PR via gh (not implemented yet) |
+| `--dry-run` | true | Skip push and `gh pr create` (default) |
+| `--no-dry-run` | — | Required with `--create-pr` |
+| `--create-pr` | false | Push branch and open draft PR via gh |
 | `--patch-file` | None | Dev: apply unified diff and commit |
 | `--force` | false | Proceed on closed issues |
 
@@ -561,4 +629,4 @@ See `.env.example` and `config.py`. Minimum for current pipeline:
 
 ---
 
-*Last updated: after Backlog #9 (GitHub #10) — PR title/body generator.*
+*Last updated: after Backlog #10 (GitHub #11) — create draft PR via gh.*

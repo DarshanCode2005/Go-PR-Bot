@@ -189,9 +189,9 @@ def build_pr_draft(
     )
 
 
-def render_pr_markdown(draft: PRDraft) -> str:
+def render_pr_body(draft: PRDraft) -> str:
+    """PR body for gh pr create (excludes markdown H1 title)."""
     return (
-        f"# {draft.title}\n\n"
         f"## Problem\n\n"
         f"{draft.problem}\n\n"
         f"## Solution\n\n"
@@ -201,6 +201,10 @@ def render_pr_markdown(draft: PRDraft) -> str:
         f"---\n\n"
         f"Fixes #{draft.issue_number}\n"
     )
+
+
+def render_pr_markdown(draft: PRDraft) -> str:
+    return f"# {draft.title}\n\n{render_pr_body(draft)}"
 
 
 def write_pr_md(ctx: RunContext, draft: PRDraft) -> Path:
