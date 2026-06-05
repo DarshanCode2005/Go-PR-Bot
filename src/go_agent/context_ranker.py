@@ -73,8 +73,11 @@ def rank_files(
             continue
 
         if distance == 0:
-            if path in hit_paths:
-                rationale = f"ripgrep hit for {hit_queries.get(path, path)}"
+            query = hit_queries.get(path, "")
+            if query.startswith("rag:"):
+                rationale = "semantic retrieval"
+            elif path in hit_paths:
+                rationale = f"ripgrep hit for {query or path}"
             else:
                 rationale = "issue hint"
         else:

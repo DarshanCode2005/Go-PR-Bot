@@ -31,6 +31,13 @@ from go_agent.github_pr import PRCreateError, maybe_create_pr
 from go_agent.patches import PatchApplyError, apply_patch_and_commit
 from go_agent.pr_writer import build_pr_draft, write_pr_md
 from go_agent.repo_map import build_repo_map, write_repo_map
+from go_agent.repo_rag import (
+    build_rag_query,
+    merge_search_hits,
+    rag_hits_to_search_hits,
+    retrieve_rag_hits,
+    write_rag_hits,
+)
 from go_agent.workspace import CloneError, RepoNotAllowedError, assert_repo_allowed, ensure_repo_cloned
 
 _REPO_PATTERN = re.compile(r"^[\w.-]+/[\w.-]+$")
@@ -99,6 +106,11 @@ def run(
         "--force",
         help="Proceed when the GitHub issue is closed",
     ),
+    rag: bool = typer.Option(
+        False,
+        "--rag/--no-rag",
+        help="Enable semantic RAG retrieval (requires pip install -e '.[rag]')",
+    ),
 ) -> None:
     """Run the agent pipeline on a GitHub issue.
 
@@ -114,6 +126,8 @@ def run(
         raise typer.Exit(code=2)
 
     settings = get_settings()
+    if rag:
+        settings = settings.model_copy(update={"enable_rag": True})
     ctx = create_run_context(settings)
     logger = configure_run_logging(ctx)
     logger.info(
@@ -162,6 +176,21 @@ def run(
             settings,
             logger=logger,
         )
+        rag_query = build_rag_query(issue_ctx)
+        rag_hits = retrieve_rag_hits(
+            repo_path,
+            issue_ctx,
+            repo,
+            settings,
+            logger=logger,
+        )
+        if settings.enable_rag:
+            write_rag_hits(ctx, issue_ctx, rag_query, rag_hits)
+            search_hits = merge_search_hits(
+                search_hits,
+                rag_hits_to_search_hits(rag_hits),
+            )
+            logger.info("RAG search: %d hits merged", len(rag_hits))
         code_graph, context_bundle = build_context_bundle(
             repo_path,
             issue_ctx,
