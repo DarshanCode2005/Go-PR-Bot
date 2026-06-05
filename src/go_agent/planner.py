@@ -159,9 +159,9 @@ def _parse_plan_json(content: str) -> dict:
 
 def _validate_fix_plan(payload: dict, issue: IssueContext) -> FixPlan:
     merged = {
+        **payload,
         "issue_number": issue.number,
         "repo": issue.repo,
-        **payload,
     }
     try:
         return FixPlan.model_validate(merged)
