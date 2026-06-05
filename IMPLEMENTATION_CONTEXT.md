@@ -18,6 +18,7 @@ Step-by-step record of what was built for each backlog item in [Go-PR-Bot](https
 | #8 Scope hints | [#9](https://github.com/DarshanCode2005/Go-PR-Bot/issues/9) | Done |
 | #9 PR generator | [#10](https://github.com/DarshanCode2005/Go-PR-Bot/issues/10) | Done |
 | #10 Create PR via gh | [#11](https://github.com/DarshanCode2005/Go-PR-Bot/issues/11) | Done |
+| #11 Repo file tree | [#12](https://github.com/DarshanCode2005/Go-PR-Bot/issues/12) | Done |
 
 ---
 
@@ -31,6 +32,8 @@ go-agent run --repo <owner/name> --issue <N>
   ├─ create_run_context()          → UUID run_id, artifact + workspace dirs
   ├─ configure_run_logging()       → console + artifacts/{run_id}/run.log
   ├─ ensure_repo_cloned()          → workspaces/{run_id}/repo
+  ├─ build_repo_map()              → file tree + go.mod + packages
+  ├─ write_repo_map()              → repo_map.json
   ├─ fetch_issue_context()         → IssueContext via gh or PyGithub
   ├─ ensure_issue_open_or_forced() → blocks closed issues unless --force
   ├─ write_issue_context()         → issue_context.json
@@ -47,7 +50,7 @@ go-agent run --repo <owner/name> --issue <N>
 
 **Approved repos:** `gin-gonic/gin`, `spf13/cobra`, `go-playground/validator`, `golangci/golangci-lint`
 
-**Test suite:** 69 tests, `pytest -q && ruff check src tests`
+**Test suite:** 77 tests, `pytest -q && ruff check src tests`
 
 ---
 
@@ -59,6 +62,7 @@ All artifacts live under `artifacts/{run_id}/`:
 |------|---------------|----------|
 | `run.log` | Backlog #3 | Structured run log with `run_id` in every line |
 | `repo_meta.json` | Backlog #4 | repo, remote HEAD SHA, cache hit, paths |
+| `repo_map.json` | Backlog #11 | File tree, go.mod module path, top-level packages |
 | `issue_context.json` | Backlog #7 | Full `IssueContext` (title, body, labels, state, comments) |
 | `scope_hints.json` | Backlog #8 | `ScopeBundle`: scope_hints, issue_number, repo |
 | `branch_meta.json` | Backlog #5 | branch name, base SHA, default branch, issue info |
@@ -91,6 +95,7 @@ Shared cache: `workspaces/_cache/{owner__repo}/` (shallow clone + `meta.json`)
 | `context_builder.py` | Stub: `prepare_scope`, `write_scope_hints` |
 | `pr_writer.py` | PR draft template + optional LLM; writes `PR.md` |
 | `github_pr.py` | Push branch + `gh pr create --draft`; writes `pr_meta.json` |
+| `repo_map.py` | Depth-limited file tree, go.mod parse, top-level packages |
 
 ---
 
@@ -555,6 +560,64 @@ pytest -q && ruff check src tests
 
 ---
 
+### Backlog #11 — Repo file tree and go.mod summary
+
+**GitHub:** [#12](https://github.com/DarshanCode2005/Go-PR-Bot/issues/12)  
+**Commit:** (pending) `feat(repo): build repo_map.json with file tree and go.mod summary (fixes #12)`  
+**PR:** (pending)
+
+#### What was built
+
+**`repo_map.py`**
+
+- `TreeNode`, `GoModSummary`, `RepoMap` pydantic models
+- `parse_go_mod()` — regex extract `module` and `go` lines
+- `build_file_tree()` — depth-limited `os.scandir` walk; skips `.git` and optional `vendor`
+- `list_top_level_packages()` — root dirs containing any `*.go` files
+- `build_repo_map()` / `write_repo_map()` → `artifacts/{run_id}/repo_map.json`
+
+**`config.py`**
+
+- `repo_map_max_depth` (default 4)
+- `repo_map_skip_vendor` (default True)
+
+#### Key decisions
+
+- Runs immediately after clone — no branch or issue fetch required
+- No `go list` subprocess — hermetic tests without Go toolchain
+- Symlinks not followed; dirs at max depth have empty children
+
+#### Tests
+
+- `tests/test_repo_map.py` — go.mod parse, depth limit, skip dirs, packages, artifact write
+
+#### CLI integration
+
+After `ensure_repo_cloned`:
+
+```python
+repo_map = build_repo_map(repo_path, repo, settings)
+write_repo_map(ctx, repo_map)
+```
+
+#### Dependencies on prior issues
+
+- Backlog #4 — cloned repo at `workspaces/{run_id}/repo`
+
+#### Out of scope
+
+- Ripgrep wrapper (Backlog #12 / GitHub #13)
+- File ranking in context builder (Backlog #13 / GitHub #14)
+- Tree size / token caps
+
+#### Verification
+
+```bash
+pytest -q && ruff check src tests
+```
+
+---
+
 ## Template for future issues
 
 Copy this block when appending the next implemented issue.
@@ -629,4 +692,4 @@ See `.env.example` and `config.py`. Minimum for current pipeline:
 
 ---
 
-*Last updated: after Backlog #10 (GitHub #11) — create draft PR via gh.*
+*Last updated: after Backlog #11 (GitHub #12) — repo file tree and go.mod summary.*
