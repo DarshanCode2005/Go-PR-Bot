@@ -118,6 +118,35 @@ def test_create_draft_pr_parses_url(tmp_path, monkeypatch, bare_repo_url: str):
     assert "--draft" in args
 
 
+def test_maybe_create_pr_missing_gh_skips_push(
+    tmp_path, monkeypatch, bare_repo_url: str
+):
+    monkeypatch.chdir(tmp_path)
+    ctx, repo_path, branch, logger = _setup_repo(tmp_path, bare_repo_url)
+    apply_patch_and_commit(
+        repo_path,
+        ctx,
+        README_PATCH,
+        42,
+        "Update readme",
+        branch.base_sha,
+        logger,
+    )
+    draft = build_pr_template(
+        IssueContext(
+            repo=TEST_REPO,
+            number=42,
+            title="Update readme",
+            state="open",
+        )
+    )
+    with patch("go_agent.github_pr.shutil.which", return_value=None):
+        with patch("go_agent.github_pr.push_branch") as push:
+            with pytest.raises(PRCreateError, match="Install and authenticate"):
+                maybe_create_pr(repo_path, TEST_REPO, branch, draft, ctx, logger)
+    push.assert_not_called()
+
+
 def test_maybe_create_pr_no_commits_raises(tmp_path, monkeypatch, bare_repo_url: str):
     monkeypatch.chdir(tmp_path)
     ctx, repo_path, branch, logger = _setup_repo(tmp_path, bare_repo_url)

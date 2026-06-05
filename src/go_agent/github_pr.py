@@ -139,6 +139,9 @@ def maybe_create_pr(
             "Branch has no commits beyond base; apply changes before --create-pr."
         )
 
+    if not shutil.which("gh"):
+        raise PRCreateError("Install and authenticate `gh` CLI to create pull requests.")
+
     push_branch(repo_path, branch.branch_name, logger)
     body = render_pr_body(draft)
     result = create_draft_pr(
