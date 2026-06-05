@@ -153,3 +153,21 @@ def test_search_scope_hints_dedupes(tmp_path):
         merged = search_scope_hints(repo, ["BindJSON", "bindjson", "go"], Settings())
 
     assert len(merged) == 1
+
+
+def test_search_scope_hints_keeps_hits_when_one_query_fails(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    hit = SearchHit(path="a.go", line_number=1, line_text="BindJSON", query="BindJSON")
+
+    def fake_search(_repo, query, _settings, **_kwargs):
+        from go_agent.repo_search import SearchResponse
+
+        if query == "BindJSON":
+            return SearchResponse(query=query, glob="*.go", hits=[hit])
+        raise RipgrepError("ripgrep timed out after 1s")
+
+    with patch("go_agent.repo_search.search_repo", side_effect=fake_search):
+        merged = search_scope_hints(repo, ["BindJSON", "SlowQuery"], Settings())
+
+    assert merged == [hit]

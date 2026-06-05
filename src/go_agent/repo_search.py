@@ -166,7 +166,12 @@ def search_scope_hints(
     merged: list[SearchHit] = []
     seen: set[tuple[str, int, str]] = set()
     for query in _dedupe_queries(hints, max_queries):
-        response = search_repo(repo_path, query, settings)
+        try:
+            response = search_repo(repo_path, query, settings)
+        except RipgrepNotFoundError:
+            raise
+        except RipgrepError:
+            continue
         for hit in response.hits:
             key = (hit.path, hit.line_number, hit.query)
             if key in seen:
