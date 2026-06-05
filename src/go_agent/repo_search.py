@@ -61,6 +61,9 @@ def _build_rg_args(
     glob_pattern = glob if glob is not None else settings.ripgrep_default_glob
     args = [
         "rg",
+        "--no-config",
+        "--color",
+        "never",
         "--line-number",
         "--no-heading",
         "--fixed-strings",

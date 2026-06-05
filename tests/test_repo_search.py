@@ -56,6 +56,9 @@ def test_search_repo_returns_hits(tmp_path):
     assert response.query == "BindJSON"
     assert response.truncated is False
     args = run.call_args[0][0]
+    assert "--no-config" in args
+    assert "--color" in args
+    assert args[args.index("--color") + 1] == "never"
     assert "--fixed-strings" in args
     assert "BindJSON" in args
 
