@@ -62,7 +62,12 @@ class CoderArtifact(BaseModel):
 
 
 def _normalize_path(path: str) -> str:
-    return path.strip().replace("\\", "/").lstrip("./")
+    normalized = path.strip().replace("\\", "/")
+    while normalized.startswith("/"):
+        normalized = normalized[1:]
+    while normalized.startswith("./"):
+        normalized = normalized[2:]
+    return normalized
 
 
 def assert_file_in_plan(path: str, plan: FixPlan) -> None:
