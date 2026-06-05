@@ -70,6 +70,13 @@ def rank_files(
         if path in hit_paths:
             score += 10.0
 
+        existing = best.get(path)
+        if existing is not None and (
+            existing.score > score
+            or (existing.score == score and existing.graph_distance <= distance)
+        ):
+            continue
+
         if distance == 0:
             if path in hit_paths:
                 rationale = f"ripgrep hit for {hit_queries.get(path, path)}"
@@ -78,16 +85,12 @@ def rank_files(
         else:
             rationale = edge_rationale(via_kind or "imports")
 
-        existing = best.get(path)
-        if existing is None or score > existing.score or (
-            score == existing.score and distance < existing.graph_distance
-        ):
-            best[path] = RankedFile(
-                path=path,
-                score=score,
-                graph_distance=distance,
-                rationale=rationale,
-            )
+        best[path] = RankedFile(
+            path=path,
+            score=score,
+            graph_distance=distance,
+            rationale=rationale,
+        )
 
         for neighbor_id, kind in neighbors(graph, node_id):
             queue.append((neighbor_id, distance + 1, kind))
