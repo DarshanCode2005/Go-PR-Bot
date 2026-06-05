@@ -47,3 +47,4 @@ def test_run_writes_branch_meta(tmp_path, monkeypatch, bare_repo_url: str):
     assert "agent/issue-99-fix-stuff" in branch_meta.read_text(encoding="utf-8")
     assert (artifact_dirs[0] / "proposed.patch").exists()
     assert (artifact_dirs[0] / "coder_meta.json").exists()
+    assert (artifact_dirs[0] / "integrator_meta.json").exists()

@@ -87,3 +87,4 @@ def test_cli_run_creates_artifact_dir(tmp_path, monkeypatch, bare_repo_url: str)
     assert "Starting run" in log_text
     assert "not implemented" in log_text.lower()
     assert (subdirs[0] / "proposed.patch").exists()
+    assert (subdirs[0] / "integrator_meta.json").exists()

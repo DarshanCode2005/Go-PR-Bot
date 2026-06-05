@@ -32,6 +32,7 @@ from go_agent.patches import PatchApplyError, apply_patch_and_commit
 from go_agent.pr_writer import build_pr_draft, write_pr_md
 from go_agent.repo_map import build_repo_map, write_repo_map
 from go_agent.coder import CoderError, build_proposed_patch, write_coder_artifact
+from go_agent.integrator import IntegratorError, integrate_file_patches, write_integrator_artifact
 from go_agent.planner import PlanError, build_fix_plan, write_plan
 from go_agent.repo_rag import (
     build_rag_query,
@@ -267,10 +268,19 @@ def run(
                 logger=logger,
             )
             write_coder_artifact(ctx, coder_artifact)
+            integrator_result = integrate_file_patches(
+                repo_path,
+                coder_artifact.files,
+                fix_plan,
+                branch.base_sha,
+                settings,
+                logger=logger,
+            )
+            write_integrator_artifact(ctx, integrator_result)
             result = apply_patch_and_commit(
                 repo_path,
                 ctx,
-                coder_artifact.combined_patch,
+                integrator_result.resolved_patch,
                 issue,
                 issue_ctx.title[:50],
                 branch.base_sha,
@@ -285,6 +295,9 @@ def run(
             )
         except CoderError as exc:
             logger.error("Coder failed: %s", exc)
+            raise typer.Exit(code=1) from exc
+        except IntegratorError as exc:
+            logger.error("Integrator failed: %s", exc)
             raise typer.Exit(code=1) from exc
         except PatchApplyError as exc:
             logger.error("Coder patch apply failed: %s", exc)
