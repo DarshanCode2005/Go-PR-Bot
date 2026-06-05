@@ -167,6 +167,30 @@ def test_integrate_raises_when_merge_fails(tmp_path, monkeypatch):
     with pytest.raises(IntegratorError, match="merge failed"):
         integrate_file_patches(repo, [patch_a, patch_b], plan, base_sha, Settings())
 
+    assert git_run(["status", "--porcelain"], cwd=repo) == ""
+
+
+def test_integrate_resets_worktree_when_merged_patch_fails(tmp_path, monkeypatch):
+    repo = _init_repo(tmp_path, with_bar=True)
+    base_sha = git_run(["rev-parse", "HEAD"], cwd=repo)
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    clear_settings_cache()
+    plan = _plan(["pkg/bar.go", "pkg/foo.go"])
+    bar_patch = normalize_llm_patch(
+        "pkg/bar.go",
+        BAR_GO,
+        "--- SEARCH\nfunc Bar() {}\n+++ REPLACE\nfunc Bar() { return 1 }\n",
+        plan,
+    )
+    patch_a = _file_patch("pkg/foo.go", FOO_GO, PATCH_A_SR)
+    patch_b = _file_patch("pkg/foo.go", FOO_GO, PATCH_B_SR)
+    monkeypatch.setattr("go_agent.llm_client._TRANSPORT", lambda **_: "not valid merge output")
+
+    with pytest.raises(IntegratorError, match="merge failed"):
+        integrate_file_patches(repo, [bar_patch, patch_a, patch_b], plan, base_sha, Settings())
+
+    assert git_run(["status", "--porcelain"], cwd=repo) == ""
+
 
 def test_write_integrator_artifact(tmp_path):
     from go_agent.integrator import ConflictResolution, IntegratorResult

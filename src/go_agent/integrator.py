@@ -194,67 +194,69 @@ def integrate_file_patches(
     conflicts: list[ConflictResolution] = []
     files_touched: list[str] = []
 
-    index = 0
-    while index < len(ordered):
-        file_patch = ordered[index]
-        path = file_patch.path
-        path_key = normalize_file_path(path)
-
-        if path_key in merged_paths:
-            index += 1
-            continue
-
-        if path_key not in base_by_path:
-            base_by_path[path_key] = _snapshot_file(repo_path, path)
-
-        try:
-            try_apply_patch(repo_path, file_patch.patch)
-            if path not in files_touched:
-                files_touched.append(path)
-            index += 1
-            continue
-        except IntegratorError as first_error:
-            log.warning("Patch apply conflict for %s: %s", path, first_error)
-            conflicting = _patches_for_path(ordered, path)
-            merged = merge_patches_with_llm(
-                path,
-                base_by_path[path_key],
-                conflicting,
-                plan,
-                settings,
-                logger=log,
-            )
-            _reset_file(repo_path, path, base_by_path[path_key])
-            try_apply_patch(repo_path, merged.patch)
-            conflicts.append(
-                ConflictResolution(
-                    path=path,
-                    patch_count=len(conflicting),
-                    merge_format=merged.format,
-                )
-            )
-            merged_paths.add(path_key)
-            if path not in files_touched:
-                files_touched.append(path)
-            while index < len(ordered) and normalize_file_path(ordered[index].path) == path_key:
-                index += 1
-
-    with tempfile.NamedTemporaryFile(
-        mode="w",
-        suffix=".patch",
-        delete=False,
-        encoding="utf-8",
-    ) as handle:
-        diff_dest = Path(handle.name)
-
+    diff_dest: Path | None = None
     try:
+        index = 0
+        while index < len(ordered):
+            file_patch = ordered[index]
+            path = file_patch.path
+            path_key = normalize_file_path(path)
+
+            if path_key in merged_paths:
+                index += 1
+                continue
+
+            if path_key not in base_by_path:
+                base_by_path[path_key] = _snapshot_file(repo_path, path)
+
+            try:
+                try_apply_patch(repo_path, file_patch.patch)
+                if path not in files_touched:
+                    files_touched.append(path)
+                index += 1
+                continue
+            except IntegratorError as first_error:
+                log.warning("Patch apply conflict for %s: %s", path, first_error)
+                conflicting = _patches_for_path(ordered, path)
+                merged = merge_patches_with_llm(
+                    path,
+                    base_by_path[path_key],
+                    conflicting,
+                    plan,
+                    settings,
+                    logger=log,
+                )
+                _reset_file(repo_path, path, base_by_path[path_key])
+                try_apply_patch(repo_path, merged.patch)
+                conflicts.append(
+                    ConflictResolution(
+                        path=path,
+                        patch_count=len(conflicting),
+                        merge_format=merged.format,
+                    )
+                )
+                merged_paths.add(path_key)
+                if path not in files_touched:
+                    files_touched.append(path)
+                while index < len(ordered) and normalize_file_path(ordered[index].path) == path_key:
+                    index += 1
+
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            suffix=".patch",
+            delete=False,
+            encoding="utf-8",
+        ) as handle:
+            diff_dest = Path(handle.name)
+
         try:
             export_changes_patch(repo_path, base_sha, diff_dest)
             resolved_patch = diff_dest.read_text(encoding="utf-8")
         except PatchApplyError as exc:
             raise IntegratorError(str(exc)) from exc
     finally:
-        diff_dest.unlink(missing_ok=True)
+        if diff_dest is not None:
+            diff_dest.unlink(missing_ok=True)
         run_git(["reset", "--hard", base_sha], cwd=repo_path)
     log.info(
         "Integrator resolved %d file(s); %d conflict merge(s)",
