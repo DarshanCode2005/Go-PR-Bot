@@ -43,6 +43,8 @@ class Settings(BaseSettings):
     rag_embed_provider: str = "local"
     rag_embed_model: str = "all-MiniLM-L6-v2"
     rag_min_score: float = 0.3
+    llm_max_retries: int = 3
+    llm_retry_base_delay: float = 1.0
 
     openai_api_key: str | None = Field(default=None, validation_alias="OPENAI_API_KEY")
     anthropic_api_key: str | None = Field(default=None, validation_alias="ANTHROPIC_API_KEY")

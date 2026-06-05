@@ -22,6 +22,7 @@ Step-by-step record of what was built for each backlog item in [Go-PR-Bot](https
 | #12 Ripgrep search | [#13](https://github.com/DarshanCode2005/Go-PR-Bot/issues/13) | Done |
 | #13 Context builder | [#14](https://github.com/DarshanCode2005/Go-PR-Bot/issues/14) | Done |
 | #14 RAG retrieval | [#15](https://github.com/DarshanCode2005/Go-PR-Bot/issues/15) | Done |
+| #15 LLM client wrapper | [#16](https://github.com/DarshanCode2005/Go-PR-Bot/issues/16) | Done |
 
 ---
 
@@ -54,7 +55,7 @@ go-agent run --repo <owner/name> --issue <N>
 
 **Approved repos:** `gin-gonic/gin`, `spf13/cobra`, `go-playground/validator`, `golangci/golangci-lint`
 
-**Test suite:** 111 tests, `pytest -q && ruff check src tests`
+**Test suite:** 119 tests, `pytest -q && ruff check src tests`
 
 ---
 
@@ -100,6 +101,7 @@ Shared cache: `workspaces/_cache/{owner__repo}/` (shallow clone + `meta.json` + 
 | `patches.py` | Apply unified diff, commit, export patch |
 | `github_issues.py` | Fetch and model issue metadata |
 | `issue_scope.py` | Heuristic + optional LLM scope hint extraction |
+| `llm_client.py` | Shared LiteLLM `complete()` with model tier routing and retries |
 | `context_builder.py` | Stub: `prepare_scope`, `write_scope_hints` |
 | `pr_writer.py` | PR draft template + optional LLM; writes `PR.md` |
 | `github_pr.py` | Push branch + `gh pr create --draft`; writes `pr_meta.json` |
@@ -858,6 +860,63 @@ go-agent run --repo gin-gonic/gin --issue 1 --dry-run --rag
 
 ---
 
+### Backlog #15 — Unified LiteLLM client
+
+**GitHub:** [#16](https://github.com/DarshanCode2005/Go-PR-Bot/issues/16)  
+**Commit:** (pending) `feat(llm): unified LiteLLM complete() with tier routing and rate-limit retry (fixes #16)`  
+**PR:** (pending)
+
+#### What was built
+
+**`llm_client.py`**
+
+- `complete(messages, tier, settings)` centralized LLM completion entry
+- Tier routing: `fast` → `model_fast`, `strong` → `model_strong`
+- Retry loop for rate limits with exponential backoff
+- Injectable `CompletionTransport` via `set_completion_transport()` for tests
+
+**Call-site refactor**
+
+- `issue_scope.py` now uses `complete(...)` in `enrich_scope_hints_llm`
+- `context_builder.py` now uses `complete(...)` in `_summarize_file`
+- `pr_writer.py` now uses `complete(...)` in `enrich_pr_llm`
+
+**Config / env**
+
+- Added `llm_max_retries` (default `3`)
+- Added `llm_retry_base_delay` (default `1.0`)
+- Documented in `.env.example`
+
+#### Key decisions
+
+- Keep caller behavior unchanged: failures return `None` and existing fallbacks stay active
+- Limit retry logic to rate-limit shaped failures only
+- Leave `repo_rag.py` embedding path out of scope for this backlog
+
+#### Tests
+
+- New `tests/test_llm_client.py` for tier routing, retries, exhausted retries, and transport injection
+- Added transport-based integration tests in `tests/test_issue_scope.py` and `tests/test_pr_writer.py`
+
+#### Dependencies on prior issues
+
+- Backlog #3/#4 settings infrastructure (`model_fast`, `model_strong`, env loading)
+- Backlog #8 and #9 optional LLM enrichers consumed the new client
+
+#### Out of scope
+
+- `litellm.embedding` in `repo_rag.py`
+- Streaming/tool-call support for LLM responses
+- Agent-loop usage of `strong` tier (future backlog)
+
+#### Verification
+
+```bash
+pytest -q && ruff check src tests
+```
+
+---
+
 ## Template for future issues
 
 Copy this block when appending the next implemented issue.
@@ -934,7 +993,9 @@ See `.env.example` and `config.py`. Minimum for current pipeline:
 | `GO_AGENT_CONTEXT_MAX_FILES` | Optional | Max ranked files in bundle (default 15) |
 | `GO_AGENT_ENABLE_RAG` | Optional | Enable semantic retrieval (default false) |
 | `GO_AGENT_RAG_EMBED_PROVIDER` | Optional | `local` or `openai` (default local) |
+| `GO_AGENT_LLM_MAX_RETRIES` | Optional | Rate-limit retry attempts for LLM completion |
+| `GO_AGENT_LLM_RETRY_BASE_DELAY` | Optional | Base delay seconds for LLM retry backoff |
 
 ---
 
-*Last updated: after Backlog #14 (GitHub #15) — optional ChromaDB RAG retrieval.*
+*Last updated: after Backlog #15 (GitHub #16) — unified LiteLLM completion client.*

@@ -22,6 +22,29 @@ go-agent run --repo gin-gonic/gin --issue 1234 --dry-run
 go-agent run --repo spf13/cobra --issue 567 --create-pr
 ```
 
+## LLM providers
+
+LiteLLM is used as a single provider layer. You can configure either OpenAI or Anthropic.
+
+OpenAI (recommended):
+
+```bash
+OPENAI_API_KEY=sk-...
+GO_AGENT_MODEL_FAST=gpt-4o-mini
+GO_AGENT_MODEL_STRONG=gpt-4o
+```
+
+Anthropic (optional):
+
+```bash
+ANTHROPIC_API_KEY=sk-ant-...
+GO_AGENT_MODEL_FAST=claude-3-5-haiku-20241022
+GO_AGENT_MODEL_STRONG=claude-3-5-sonnet-20241022
+```
+
+LiteLLM routes by model name and key availability. LLM enrichments are best-effort: if keys are missing
+or a call fails, the pipeline falls back to heuristic/template behavior.
+
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for system design and [docs/GITHUB_ISSUES.md](docs/GITHUB_ISSUES.md) for the step-by-step implementation backlog.
 
 ## Stack (recommended)

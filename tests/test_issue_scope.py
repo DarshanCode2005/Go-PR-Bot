@@ -11,6 +11,7 @@ from go_agent.issue_scope import (
     build_scope_hints,
     extract_scope_hints,
 )
+from go_agent.llm_client import set_completion_transport
 
 FIXTURES = Path(__file__).parent / "fixtures" / "issue_bodies"
 
@@ -18,7 +19,9 @@ FIXTURES = Path(__file__).parent / "fixtures" / "issue_bodies"
 @pytest.fixture(autouse=True)
 def _clear_settings_cache():
     clear_settings_cache()
+    set_completion_transport(None)
     yield
+    set_completion_transport(None)
     clear_settings_cache()
 
 
@@ -89,3 +92,17 @@ def test_build_scope_hints_merges_llm_hints():
         hints = build_scope_hints(issue, settings)
     assert "context.go" in hints
     assert "extra_symbol" in hints
+
+
+def test_build_scope_hints_with_mock_transport(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    issue = _issue_from_fixture("gin_router.md")
+    settings = Settings()
+
+    set_completion_transport(
+        lambda **_: '{"scope_hints": ["routergroup.go", "handleHTTPRequest"]}'
+    )
+    hints = build_scope_hints(issue, settings)
+
+    assert "routergroup.go" in hints
+    assert "handleHTTPRequest" in hints

@@ -10,6 +10,7 @@ from pydantic import BaseModel
 
 from go_agent.config import Settings
 from go_agent.github_issues import IssueContext
+from go_agent.llm_client import complete
 from go_agent.patches import format_commit_message
 from go_agent.run_context import RunContext
 
@@ -119,14 +120,6 @@ def enrich_pr_llm(
     scope_hints: list[str] | None = None,
 ) -> PRDraft:
     """Optionally refine PR sections via LLM; return template draft on failure."""
-    if not settings.openai_api_key and not settings.anthropic_api_key:
-        return draft
-
-    try:
-        import litellm
-    except ImportError:
-        return draft
-
     patch_excerpt = (patch_text or "")[:2000]
     hints_text = ", ".join(scope_hints or [])[:500]
     prompt = (
@@ -143,12 +136,14 @@ def enrich_pr_llm(
         f"test_plan: {draft.test_plan}\n"
     )
     try:
-        response = litellm.completion(
-            model=settings.model_fast,
+        content = complete(
             messages=[{"role": "user", "content": prompt}],
+            tier="fast",
+            settings=settings,
             temperature=0,
         )
-        content = response.choices[0].message.content or ""
+        if not content:
+            return draft
         start = content.find("{")
         end = content.rfind("}")
         if start == -1 or end == -1:
