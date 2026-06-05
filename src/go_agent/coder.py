@@ -6,6 +6,7 @@ import logging
 import re
 import subprocess
 import tempfile
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Literal
 
@@ -59,6 +60,7 @@ class CoderArtifact(BaseModel):
     repo: str
     files: list[FilePatch] = Field(default_factory=list)
     combined_patch: str
+    execution_waves: list[list[str]] = Field(default_factory=list)
 
 
 def _normalize_path(path: str) -> str:
@@ -68,6 +70,161 @@ def _normalize_path(path: str) -> str:
     while normalized.startswith("./"):
         normalized = normalized[2:]
     return normalized
+
+
+def _canonical_path_map(plan: FixPlan) -> dict[str, str]:
+    return {_normalize_path(path): path for path in plan.files}
+
+
+def _direct_dependencies(plan: FixPlan, file_path: str) -> list[str]:
+    normalized = _normalize_path(file_path)
+    for key, deps in plan.file_dependencies.items():
+        if _normalize_path(key) == normalized:
+            return list(deps)
+    return []
+
+
+def _dependency_closure(plan: FixPlan, file_path: str) -> list[str]:
+    canonical = _canonical_path_map(plan)
+    normalized = _normalize_path(file_path)
+    ordered: list[str] = []
+    seen: set[str] = set()
+
+    def visit(node: str) -> None:
+        for dep in _direct_dependencies(plan, canonical.get(node, node)):
+            dep_norm = _normalize_path(dep)
+            if dep_norm in seen:
+                continue
+            visit(dep_norm)
+            if dep_norm not in seen:
+                ordered.append(canonical[dep_norm])
+                seen.add(dep_norm)
+
+    visit(normalized)
+    return ordered
+
+
+def schedule_coder_waves(plan: FixPlan) -> list[list[str]]:
+    """Return topological waves of planned files for parallel/sequential coding."""
+    if not plan.files:
+        return []
+
+    canonical = _canonical_path_map(plan)
+    normalized_files = [_normalize_path(path) for path in plan.files]
+    indegree = {path: 0 for path in normalized_files}
+    dependents: dict[str, list[str]] = {path: [] for path in normalized_files}
+
+    for path in plan.files:
+        node = _normalize_path(path)
+        for dep in _direct_dependencies(plan, path):
+            dep_norm = _normalize_path(dep)
+            if dep_norm not in indegree:
+                msg = f"file_dependencies for {path!r} references unknown file {dep!r}"
+                raise CoderError(msg)
+            indegree[node] += 1
+            dependents[dep_norm].append(node)
+
+    waves: list[list[str]] = []
+    ready = sorted(path for path, degree in indegree.items() if degree == 0)
+    visited = 0
+
+    while ready:
+        wave = [canonical[path] for path in ready]
+        waves.append(wave)
+        visited += len(ready)
+        next_ready: list[str] = []
+        for path in ready:
+            for dependent in dependents[path]:
+                indegree[dependent] -= 1
+                if indegree[dependent] == 0:
+                    next_ready.append(dependent)
+        ready = sorted(next_ready)
+
+    if visited != len(normalized_files):
+        msg = "file_dependencies contains a cycle"
+        raise CoderError(msg)
+    return waves
+
+
+def _apply_patch_to_content(path: str, content: str, patch: FilePatch) -> str:
+    if patch.format == "search_replace" and patch.search_replace_raw:
+        blocks = parse_search_replace_blocks(patch.search_replace_raw)
+        return apply_search_replace_blocks(content, blocks)
+    if not patch.patch.strip():
+        return content
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        subprocess.run(
+            ["git", "init"],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        subprocess.run(
+            ["git", "config", "user.email", "coder@test"],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        subprocess.run(
+            ["git", "config", "user.name", "Coder"],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        rel = Path(path)
+        target = root / rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(content, encoding="utf-8")
+        subprocess.run(["git", "add", "-A"], cwd=root, capture_output=True, text=True, check=True)
+        subprocess.run(
+            ["git", "commit", "-m", "base"],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        patch_path = root / "overlay.patch"
+        patch_path.write_text(patch.patch, encoding="utf-8")
+        result = subprocess.run(
+            ["git", "apply", str(patch_path)],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode != 0:
+            msg = f"failed to overlay dependency patch for {path}: {result.stderr.strip()}"
+            raise CoderError(msg)
+        return target.read_text(encoding="utf-8")
+
+
+def _read_file_for_coding(
+    repo_path: Path,
+    file_path: str,
+    settings: Settings,
+) -> str:
+    return _read_repo_file(repo_path, file_path, settings)
+
+
+def _dependency_context_for_file(
+    repo_path: Path,
+    file_path: str,
+    completed: dict[str, FilePatch],
+    plan: FixPlan,
+    settings: Settings,
+) -> str | None:
+    parts: list[str] = []
+    for dep in _dependency_closure(plan, file_path):
+        dep_content = _read_repo_file(repo_path, dep, settings)
+        dep_patch = completed.get(dep)
+        if dep_patch is not None:
+            dep_content = _apply_patch_to_content(dep, dep_content, dep_patch)
+        parts.append(f"### {dep} (after planned edit)\n{dep_content[:4000]}")
+    return "\n\n".join(parts) if parts else None
 
 
 def assert_file_in_plan(path: str, plan: FixPlan) -> None:
@@ -232,6 +389,7 @@ def build_coder_messages(
     bundle_entry: ContextFileEntry | None,
     *,
     correction: str | None = None,
+    dependency_context: str | None = None,
 ) -> list[dict[str, str]]:
     steps = "\n".join(f"- {step}" for step in plan_slice.steps)
     tests = "\n".join(f"- {command}" for command in plan_slice.test_commands)
@@ -249,6 +407,8 @@ def build_coder_messages(
             f"Context note ({bundle_entry.content_tier}): {bundle_entry.rationale}\n"
             f"{bundle_entry.content[:2000]}"
         )
+    if dependency_context:
+        context_bits.append(f"Dependency context:\n{dependency_context}")
     if correction:
         context_bits.append(correction)
     return [
@@ -277,6 +437,9 @@ def generate_file_patch(
     context_bundle: ContextBundle,
     settings: Settings,
     logger: logging.Logger | None = None,
+    *,
+    file_content: str | None = None,
+    dependency_context: str | None = None,
 ) -> FilePatch:
     """Generate a normalized unified diff for one planned file."""
     log = logger or logging.getLogger("go_agent")
@@ -284,10 +447,20 @@ def generate_file_patch(
         raise CoderError("LLM API key required for coder")
 
     normalized_path = _normalize_path(file_path)
-    original = _read_repo_file(repo_path, normalized_path, settings)
+    original = (
+        file_content
+        if file_content is not None
+        else _read_repo_file(repo_path, normalized_path, settings)
+    )
     plan_slice = plan_slice_for_file(plan, normalized_path)
     bundle_entry = _bundle_entry_for_file(context_bundle, normalized_path)
-    messages = build_coder_messages(issue, plan_slice, original, bundle_entry)
+    messages = build_coder_messages(
+        issue,
+        plan_slice,
+        original,
+        bundle_entry,
+        dependency_context=dependency_context,
+    )
 
     try:
         content = complete(messages, tier="fast", settings=settings)
@@ -307,6 +480,7 @@ def generate_file_patch(
                 f"Previous output was invalid: {first_error}. "
                 "Return SEARCH/REPLACE blocks or a unified diff for this file only."
             ),
+            dependency_context=dependency_context,
         )
         content = complete(retry_messages, tier="fast", settings=settings)
         if not content:
@@ -326,6 +500,37 @@ def combine_file_patches(file_patches: list[FilePatch]) -> str:
     return "\n".join(parts) + "\n"
 
 
+def _generate_file_patch_for_wave(
+    repo_path: Path,
+    issue: IssueContext,
+    plan: FixPlan,
+    file_path: str,
+    context_bundle: ContextBundle,
+    settings: Settings,
+    completed: dict[str, FilePatch],
+    logger: logging.Logger,
+) -> FilePatch:
+    file_content = _read_file_for_coding(repo_path, file_path, settings)
+    dependency_context = _dependency_context_for_file(
+        repo_path,
+        file_path,
+        completed,
+        plan,
+        settings,
+    )
+    return generate_file_patch(
+        repo_path,
+        issue,
+        plan,
+        file_path,
+        context_bundle,
+        settings,
+        logger=logger,
+        file_content=file_content,
+        dependency_context=dependency_context,
+    )
+
+
 def build_proposed_patch(
     repo_path: Path,
     issue: IssueContext,
@@ -339,28 +544,61 @@ def build_proposed_patch(
     if not plan.files:
         raise CoderError("plan.files is empty; nothing to code")
 
-    file_patches: list[FilePatch] = []
-    for path in plan.files:
-        file_patch = generate_file_patch(
-            repo_path,
-            issue,
-            plan,
-            path,
-            context_bundle,
-            settings,
-            logger=log,
-        )
-        file_patches.append(file_patch)
+    waves = schedule_coder_waves(plan)
+    completed: dict[str, FilePatch] = {}
 
+    for wave_index, wave in enumerate(waves):
+        log.info("Coder wave %d: %d files (parallel)", wave_index, len(wave))
+        if len(wave) == 1:
+            path = wave[0]
+            completed[path] = _generate_file_patch_for_wave(
+                repo_path,
+                issue,
+                plan,
+                path,
+                context_bundle,
+                settings,
+                dict(completed),
+                log,
+            )
+            continue
+
+        max_workers = max(1, min(settings.coder_max_workers, len(wave)))
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            futures = {
+                pool.submit(
+                    _generate_file_patch_for_wave,
+                    repo_path,
+                    issue,
+                    plan,
+                    path,
+                    context_bundle,
+                    settings,
+                    dict(completed),
+                    log,
+                ): path
+                for path in wave
+            }
+            try:
+                for future in as_completed(futures):
+                    path = futures[future]
+                    completed[path] = future.result()
+            except CoderError:
+                for pending in futures:
+                    pending.cancel()
+                raise
+
+    file_patches = [completed[path] for path in plan.files if path in completed]
     combined = combine_file_patches(file_patches)
     if not combined.strip():
         raise CoderError("coder generated no changes for any planned file")
-    log.info("Coder produced %d file patch(es)", len(file_patches))
+    log.info("Coder produced %d file patch(es) in %d wave(s)", len(file_patches), len(waves))
     return CoderArtifact(
         issue_number=issue.number,
         repo=issue.repo,
         files=file_patches,
         combined_patch=combined,
+        execution_waves=waves,
     )
 
 

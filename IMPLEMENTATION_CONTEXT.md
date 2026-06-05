@@ -25,6 +25,7 @@ Step-by-step record of what was built for each backlog item in [Go-PR-Bot](https
 | #15 LLM client wrapper | [#16](https://github.com/DarshanCode2005/Go-PR-Bot/issues/16) | Done |
 | #16 Planner agent | [#17](https://github.com/DarshanCode2005/Go-PR-Bot/issues/17) | Done |
 | #17 Coder agent | [#18](https://github.com/DarshanCode2005/Go-PR-Bot/issues/18) | Done |
+| #18 Parallel coder | [#19](https://github.com/DarshanCode2005/Go-PR-Bot/issues/19) | Done |
 
 ---
 
@@ -49,7 +50,7 @@ go-agent run --repo <owner/name> --issue <N>
   ├─ build_fix_plan()                   → plan.json (fails run if planner cannot complete)
   ├─ create_issue_branch()         → agent/issue-{N}-{slug}
   ├─ write_branch_meta()           → branch_meta.json
-  ├─ build_proposed_patch()        → proposed.patch + coder_meta.json (skipped with --patch-file)
+  ├─ build_proposed_patch()        → wave-scheduled parallel coder → proposed.patch + coder_meta.json
   ├─ apply_patch_and_commit()      → auto coder patch or --patch-file dev path
   ├─ build_pr_draft() + write_pr_md()    → PR.md
   ├─ [optional] maybe_create_pr()        → --no-dry-run --create-pr only
@@ -59,7 +60,7 @@ go-agent run --repo <owner/name> --issue <N>
 
 **Approved repos:** `gin-gonic/gin`, `spf13/cobra`, `go-playground/validator`, `golangci/golangci-lint`
 
-**Test suite:** 134 tests, `pytest -q && ruff check src tests`
+**Test suite:** 144 tests, `pytest -q && ruff check src tests`
 
 ---
 
@@ -78,9 +79,9 @@ All artifacts live under `artifacts/{run_id}/`:
 | `rag_hits.json` | Backlog #14 | Semantic RAG hits (when `--rag`); merged into bundle seeds |
 | `code_graph.json` | Backlog #13 | In-memory code graph: nodes, edges, seeds |
 | `context_bundle.json` | Backlog #13 | Ranked files with tiered content under char budget |
-| `plan.json` | Backlog #16 | Structured fix plan: files, steps, test_commands, acceptance_criteria |
+| `plan.json` | Backlog #16 | Structured fix plan: files, steps, test_commands, acceptance_criteria, optional `file_dependencies` |
 | `proposed.patch` | Backlog #17 | Combined unified diff from coder (per-file LLM patches) |
-| `coder_meta.json` | Backlog #17 | Per-file patch metadata and combined diff |
+| `coder_meta.json` | Backlog #17 | Per-file patch metadata, `execution_waves`, combined diff |
 | `branch_meta.json` | Backlog #5 | branch name, base SHA, default branch, issue info |
 | `changes.patch` | Backlog #6 | `git diff` from base SHA (after patch apply) |
 | `PR.md` | Backlog #9 | Draft PR title/body: Problem, Solution, Test plan, Fixes #N |
@@ -1065,6 +1066,51 @@ pytest -q && ruff check src tests
 
 ---
 
+### Backlog #18 — Parallel coder orchestration
+
+**GitHub:** [#19](https://github.com/DarshanCode2005/Go-PR-Bot/issues/19)  
+**Commit:** (pending) `feat(coder): parallel per-file coding with depends_on wave scheduling (fixes #19)`  
+**PR:** (pending)
+
+#### What was built
+
+**`planner.py`**
+
+- `FixPlan.file_dependencies: dict[str, list[str]]` — optional per-file `depends_on`
+- Planner prompt documents optional `file_dependencies` key
+- Validators: unknown paths, self-deps, and cycles rejected at plan parse time
+
+**`coder.py`**
+
+- `schedule_coder_waves()` — topological waves via Kahn's algorithm
+- `build_proposed_patch()` — runs each wave in parallel via `ThreadPoolExecutor` (`coder_max_workers`)
+- Dependent files run in later waves; disjoint files in the same wave run concurrently
+- `_dependency_context_for_file()` — injects upstream files' post-patch content into dependent file prompts
+- `CoderArtifact.execution_waves` recorded in `coder_meta.json`
+
+**`config.py`**
+
+- `coder_max_workers` (default `4`)
+
+#### Key decisions
+
+- Thread pool over asyncio — sync `complete()` stays unchanged
+- Cross-file dependency context passed in LLM prompt, not applied to target file content
+- Empty/missing `file_dependencies` → single parallel wave (backward compatible)
+
+#### Tests
+
+- `tests/test_planner.py` — dependency validation and cycle rejection
+- `tests/test_coder.py` — wave scheduling, parallel concurrency, sequential order, dependency overlay
+
+#### Verification
+
+```bash
+pytest -q && ruff check src tests
+```
+
+---
+
 ## Template for future issues
 
 Copy this block when appending the next implemented issue.
@@ -1146,4 +1192,4 @@ See `.env.example` and `config.py`. Minimum for current pipeline:
 
 ---
 
-*Last updated: after Backlog #17 (GitHub #18) — coder agent and proposed.patch artifact.*
+*Last updated: after Backlog #18 (GitHub #19) — parallel coder wave scheduling and file_dependencies.*
