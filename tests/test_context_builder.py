@@ -173,6 +173,25 @@ def test_build_context_bundle_mock_llm_summary(mock_summary, tmp_path, monkeypat
     assert summary_entries[0].content == "summary text"
 
 
+def test_build_context_bundle_includes_rag_search_hit_seeds(tmp_path):
+    issue = _issue_from_fixture("gin_router.md")
+    repo = _bundle_repo(tmp_path)
+    bundle = prepare_scope(issue, Settings())
+    hits = [
+        SearchHit(
+            path="small.go",
+            line_number=1,
+            line_text="package main",
+            query="rag:Fix middleware ordering",
+        ),
+    ]
+    _, context_bundle = build_context_bundle(repo, issue, bundle, hits, Settings())
+    paths = {entry.path for entry in context_bundle.files}
+    assert "small.go" in paths
+    rationales = {entry.rationale for entry in context_bundle.files if entry.path == "small.go"}
+    assert "semantic retrieval" in rationales
+
+
 def test_write_context_bundle_artifact(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     issue = _issue_from_fixture("gin_router.md")

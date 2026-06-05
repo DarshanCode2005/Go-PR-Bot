@@ -22,7 +22,7 @@ def test_main_help():
 def test_run_help():
     result = runner.invoke(app, ["run", "--help"])
     assert result.exit_code == 0
-    for flag in ("--repo", "--issue", "--dry-run", "--create-pr"):
+    for flag in ("--repo", "--issue", "--dry-run", "--create-pr", "--rag"):
         assert flag in result.stdout
 
 

@@ -36,6 +36,13 @@ class Settings(BaseSettings):
     context_snippet_radius: int = 5
     context_full_file_top_k: int = 3
     context_summary_top_k: int = 5
+    enable_rag: bool = False
+    rag_top_k: int = 10
+    rag_chunk_lines: int = 80
+    rag_chunk_overlap: int = 20
+    rag_embed_provider: str = "local"
+    rag_embed_model: str = "all-MiniLM-L6-v2"
+    rag_min_score: float = 0.3
 
     openai_api_key: str | None = Field(default=None, validation_alias="OPENAI_API_KEY")
     anthropic_api_key: str | None = Field(default=None, validation_alias="ANTHROPIC_API_KEY")

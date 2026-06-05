@@ -21,6 +21,7 @@ Step-by-step record of what was built for each backlog item in [Go-PR-Bot](https
 | #11 Repo file tree | [#12](https://github.com/DarshanCode2005/Go-PR-Bot/issues/12) | Done |
 | #12 Ripgrep search | [#13](https://github.com/DarshanCode2005/Go-PR-Bot/issues/13) | Done |
 | #13 Context builder | [#14](https://github.com/DarshanCode2005/Go-PR-Bot/issues/14) | Done |
+| #14 RAG retrieval | [#15](https://github.com/DarshanCode2005/Go-PR-Bot/issues/15) | Done |
 
 ---
 
@@ -40,6 +41,7 @@ go-agent run --repo <owner/name> --issue <N>
   ├─ ensure_issue_open_or_forced() → blocks closed issues unless --force
   ├─ write_issue_context()         → issue_context.json
   ├─ prepare_scope() + ripgrep search     → scope_hints.json + search_hits.json
+  ├─ [optional --rag] semantic retrieval  → rag_hits.json merged into search hits
   ├─ build_context_bundle()             → code_graph.json + context_bundle.json
   ├─ create_issue_branch()         → agent/issue-{N}-{slug}
   ├─ write_branch_meta()           → branch_meta.json
@@ -52,7 +54,7 @@ go-agent run --repo <owner/name> --issue <N>
 
 **Approved repos:** `gin-gonic/gin`, `spf13/cobra`, `go-playground/validator`, `golangci/golangci-lint`
 
-**Test suite:** 101 tests, `pytest -q && ruff check src tests`
+**Test suite:** 111 tests, `pytest -q && ruff check src tests`
 
 ---
 
@@ -68,6 +70,7 @@ All artifacts live under `artifacts/{run_id}/`:
 | `issue_context.json` | Backlog #7 | Full `IssueContext` (title, body, labels, state, comments) |
 | `scope_hints.json` | Backlog #8 | `ScopeBundle`: scope_hints, files (from search), issue_number, repo |
 | `search_hits.json` | Backlog #12 | Ripgrep hits: path, line_number, line_text, query |
+| `rag_hits.json` | Backlog #14 | Semantic RAG hits (when `--rag`); merged into bundle seeds |
 | `code_graph.json` | Backlog #13 | In-memory code graph: nodes, edges, seeds |
 | `context_bundle.json` | Backlog #13 | Ranked files with tiered content under char budget |
 | `branch_meta.json` | Backlog #5 | branch name, base SHA, default branch, issue info |
@@ -77,7 +80,7 @@ All artifacts live under `artifacts/{run_id}/`:
 
 Workspace clone: `workspaces/{run_id}/repo`
 
-Shared cache: `workspaces/_cache/{owner__repo}/` (shallow clone + `meta.json`)
+Shared cache: `workspaces/_cache/{owner__repo}/` (shallow clone + `meta.json` + optional `rag_index/{sha}/`)
 
 ---
 
@@ -768,12 +771,89 @@ write_context_bundle(ctx, context_bundle)
 - Neo4j / cross-run graph persistence
 - `go/packages` import analysis
 - Planner/coder agent consumption of bundle (later)
-- Embeddings RAG (Backlog #14 / GitHub #15)
+- Embeddings RAG (moved to Backlog #14 — done)
 
 #### Verification
 
 ```bash
 pytest -q && ruff check src tests
+```
+
+---
+
+### Backlog #14 — Optional RAG for context retrieval
+
+**GitHub:** [#15](https://github.com/DarshanCode2005/Go-PR-Bot/issues/15)  
+**Commit:** (pending) `feat(rag): optional ChromaDB semantic retrieval with offline embedder (fixes #15)`  
+**PR:** (pending)
+
+#### What was built
+
+**`repo_rag.py`**
+
+- `RagChunk`, `RagHit`, `RagArtifact` models
+- `chunk_go_files()` — overlapping line windows; same skip rules as code graph
+- `get_or_build_index()` — ChromaDB persistent index cached at `workspaces/_cache/{repo}/rag_index/{sha[:12]}/`
+- `retrieve_chunks()` / `retrieve_rag_hits()` — top-k semantic search for issue query
+- `rag_hits_to_search_hits()` + `merge_search_hits()` — feed existing graph/ranker pipeline
+- `write_rag_hits()` → `rag_hits.json`
+
+**Embed providers**
+
+- **Local (offline):** `sentence-transformers` (`all-MiniLM-L6-v2` default) via `pip install -e ".[rag]"`
+- **API:** OpenAI embeddings via LiteLLM when `rag_embed_provider=openai`
+
+**`config.py` / `.env.example` / `cli.py`**
+
+- `enable_rag`, `rag_top_k`, `rag_chunk_lines`, `rag_chunk_overlap`, `rag_embed_provider`, `rag_embed_model`, `rag_min_score`
+- `--rag/--no-rag` CLI flag (default off); `GO_AGENT_ENABLE_RAG` env mirror
+
+**`context_ranker.py`**
+
+- Rationale `"semantic retrieval"` for hits with `rag:` query prefix
+
+#### Key decisions
+
+- ChromaDB embedded (already in `pyproject.toml` optional extra) over Qdrant — simpler offline setup
+- RAG supplements ripgrep; default path unchanged when disabled
+- Missing deps or failures log warning and fall back to ripgrep-only
+- Index cached per repo SHA to avoid re-embedding on repeat runs
+
+#### Tests
+
+- `tests/test_repo_rag.py` — chunking, adapter, merge, disabled/missing-deps fallback, artifact write
+- `tests/test_context_builder.py` — RAG hits seed bundle with semantic rationale
+- `tests/test_cli.py` — `--rag` in help
+
+#### CLI integration
+
+After ripgrep search, before `build_context_bundle`:
+
+```python
+rag_hits = retrieve_rag_hits(repo_path, issue_ctx, repo, settings, logger=logger)
+if settings.enable_rag:
+    write_rag_hits(ctx, issue_ctx, rag_query, rag_hits)
+    search_hits = merge_search_hits(search_hits, rag_hits_to_search_hits(rag_hits))
+```
+
+#### Dependencies on prior issues
+
+- Backlog #12 — ripgrep `SearchHit` contract
+- Backlog #13 — graph seeds and context bundle consume merged hits
+
+#### Out of scope
+
+- Qdrant / Neo4j vector store
+- AST-aware Go chunking
+- Cross-issue Mem0 memory
+- Direct agent-loop RAG consumption (bundle remains contract)
+
+#### Verification
+
+```bash
+pytest -q && ruff check src tests
+pip install -e ".[rag]"   # for local embeddings
+go-agent run --repo gin-gonic/gin --issue 1 --dry-run --rag
 ```
 
 ---
@@ -837,6 +917,7 @@ pytest -q && ruff check src tests
 | `--create-pr` | false | Push branch and open draft PR via gh |
 | `--patch-file` | None | Dev: apply unified diff and commit |
 | `--force` | false | Proceed on closed issues |
+| `--rag` | false | Enable semantic RAG retrieval (`pip install -e ".[rag]"`) |
 
 ---
 
@@ -851,7 +932,9 @@ See `.env.example` and `config.py`. Minimum for current pipeline:
 | `GO_AGENT_LOG_LEVEL` | Optional | DEBUG/INFO/WARNING/ERROR |
 | `GO_AGENT_CONTEXT_MAX_CHARS` | Optional | Context bundle char budget (default 80000) |
 | `GO_AGENT_CONTEXT_MAX_FILES` | Optional | Max ranked files in bundle (default 15) |
+| `GO_AGENT_ENABLE_RAG` | Optional | Enable semantic retrieval (default false) |
+| `GO_AGENT_RAG_EMBED_PROVIDER` | Optional | `local` or `openai` (default local) |
 
 ---
 
-*Last updated: after Backlog #13 (GitHub #14) — context graph, ranked bundle, tiered packing.*
+*Last updated: after Backlog #14 (GitHub #15) — optional ChromaDB RAG retrieval.*
