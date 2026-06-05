@@ -56,10 +56,7 @@ class IntegratorResult(BaseModel):
 
 def _snapshot_file(repo_path: Path, path: str) -> str:
     full_path = repo_path / path
-    if not full_path.is_file():
-        msg = f"integration base file not found: {path}"
-        raise IntegratorError(msg)
-    return full_path.read_text(encoding="utf-8")
+    return full_path.read_text(encoding="utf-8") if full_path.is_file() else ""
 
 
 def _reset_file(repo_path: Path, path: str, content: str) -> None:
@@ -249,6 +246,7 @@ def integrate_file_patches(
             diff_dest = Path(handle.name)
 
         try:
+            run_git(["add", "-A"], cwd=repo_path)
             export_changes_patch(repo_path, base_sha, diff_dest)
             resolved_patch = diff_dest.read_text(encoding="utf-8")
         except PatchApplyError as exc:

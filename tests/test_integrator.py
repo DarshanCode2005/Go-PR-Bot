@@ -93,6 +93,46 @@ def test_merge_messages_include_both_hunks():
     assert "return 3" in user
 
 
+NEW_FILE_PATCH = """diff --git a/pkg/new.go b/pkg/new.go
+new file mode 100644
+index 0000000..e69de29
+--- /dev/null
++++ b/pkg/new.go
+@@ -0,0 +1,3 @@
++package pkg
++
++func New() {}
+"""
+
+
+def test_integrate_applies_new_file_patch(tmp_path):
+    repo = _init_repo(tmp_path)
+    base_sha = git_run(["rev-parse", "HEAD"], cwd=repo)
+    new_patch = normalize_llm_patch(
+        "pkg/new.go",
+        "",
+        NEW_FILE_PATCH,
+        _plan(["pkg/new.go"]),
+    )
+    result = integrate_file_patches(
+        repo,
+        [new_patch],
+        _plan(["pkg/new.go"]),
+        base_sha,
+        Settings(),
+    )
+    assert result.conflicts == []
+    assert result.files_touched == ["pkg/new.go"]
+    check = subprocess.run(
+        ["git", "apply", "--check"],
+        cwd=repo,
+        input=result.resolved_patch,
+        text=True,
+        capture_output=True,
+    )
+    assert check.returncode == 0, check.stderr
+
+
 def test_integrate_applies_disjoint_files_in_order(tmp_path):
     repo = _init_repo(tmp_path, with_bar=True)
     base_sha = git_run(["rev-parse", "HEAD"], cwd=repo)
