@@ -21,6 +21,7 @@ from go_agent.github_issues import (
     write_issue_context,
 )
 from go_agent.patches import PatchApplyError, apply_patch_and_commit
+from go_agent.pr_writer import build_pr_draft, write_pr_md
 from go_agent.workspace import CloneError, RepoNotAllowedError, assert_repo_allowed, ensure_repo_cloned
 
 _REPO_PATTERN = re.compile(r"^[\w.-]+/[\w.-]+$")
@@ -158,6 +159,8 @@ def run(
         logger.error("Branch creation failed: %s", exc)
         raise typer.Exit(code=1) from exc
 
+    patch_text: str | None = None
+    commit_message: str | None = None
     if patch_file is not None:
         try:
             patch_text = patch_file.read_text(encoding="utf-8")
@@ -170,6 +173,8 @@ def run(
                 branch.base_sha,
                 logger,
             )
+            patch_text = result.changes_patch_path.read_text(encoding="utf-8")
+            commit_message = result.commit_message
             logger.info(
                 "Patch applied; commit %s; changes at %s",
                 result.commit_sha[:8],
@@ -178,6 +183,16 @@ def run(
         except PatchApplyError as exc:
             logger.error("Patch apply failed: %s", exc)
             raise typer.Exit(code=1) from exc
+
+    pr_draft = build_pr_draft(
+        issue_ctx,
+        settings,
+        scope_hints=scope_bundle.scope_hints,
+        patch_text=patch_text,
+        commit_message=commit_message,
+    )
+    pr_path = write_pr_md(ctx, pr_draft)
+    logger.info("PR draft written to %s", pr_path)
 
     logger.warning(
         "Pipeline not implemented yet: %s#%s dry_run=%s create_pr=%s",

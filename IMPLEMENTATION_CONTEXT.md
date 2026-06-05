@@ -16,7 +16,7 @@ Step-by-step record of what was built for each backlog item in [Go-PR-Bot](https
 | #6 Patches helper | [#7](https://github.com/DarshanCode2005/Go-PR-Bot/issues/7) | Done |
 | #7 Fetch issue metadata | [#8](https://github.com/DarshanCode2005/Go-PR-Bot/issues/8) | Done |
 | #8 Scope hints | [#9](https://github.com/DarshanCode2005/Go-PR-Bot/issues/9) | Done |
-| #9 PR generator | [#10](https://github.com/DarshanCode2005/Go-PR-Bot/issues/10) | Not started |
+| #9 PR generator | [#10](https://github.com/DarshanCode2005/Go-PR-Bot/issues/10) | Done |
 | … | … | … |
 
 ---
@@ -39,12 +39,13 @@ go-agent run --repo <owner/name> --issue <N>
   ├─ create_issue_branch()         → agent/issue-{N}-{slug}
   ├─ write_branch_meta()           → branch_meta.json
   ├─ [optional] apply_patch_and_commit()  → --patch-file dev path
+  ├─ build_pr_draft() + write_pr_md()    → PR.md
   └─ exit 1 — "Pipeline not implemented yet"
 ```
 
 **Approved repos:** `gin-gonic/gin`, `spf13/cobra`, `go-playground/validator`, `golangci/golangci-lint`
 
-**Test suite:** 55 tests, `pytest -q && ruff check src tests`
+**Test suite:** 60 tests, `pytest -q && ruff check src tests`
 
 ---
 
@@ -60,6 +61,7 @@ All artifacts live under `artifacts/{run_id}/`:
 | `scope_hints.json` | Backlog #8 | `ScopeBundle`: scope_hints, issue_number, repo |
 | `branch_meta.json` | Backlog #5 | branch name, base SHA, default branch, issue info |
 | `changes.patch` | Backlog #6 | `git diff` from base SHA (when `--patch-file` used) |
+| `PR.md` | Backlog #9 | Draft PR title/body: Problem, Solution, Test plan, Fixes #N |
 
 Workspace clone: `workspaces/{run_id}/repo`
 
@@ -84,6 +86,7 @@ Shared cache: `workspaces/_cache/{owner__repo}/` (shallow clone + `meta.json`)
 | `github_issues.py` | Fetch and model issue metadata |
 | `issue_scope.py` | Heuristic + optional LLM scope hint extraction |
 | `context_builder.py` | Stub: `prepare_scope`, `write_scope_hints` |
+| `pr_writer.py` | PR draft template + optional LLM; writes `PR.md` |
 
 ---
 
@@ -424,6 +427,66 @@ Runs after `write_issue_context`, before `create_issue_branch`.
 
 ---
 
+### Backlog #9 — PR title and body generator
+
+**GitHub:** [#10](https://github.com/DarshanCode2005/Go-PR-Bot/issues/10)  
+**Commit:** (pending) `feat(pr): generate PR.md draft from issue and optional patch (fixes #10)`  
+**PR:** (pending)
+
+#### What was built
+
+**`pr_writer.py`**
+
+- `PRDraft` — title, problem, solution, test_plan, issue_number, repo
+- `build_pr_template()` — offline draft from issue + optional scope hints + patch:
+  - Title via [`format_commit_message`](src/go_agent/patches.py) or existing commit message
+  - Problem from issue title + first body paragraph
+  - Solution from changed files in patch, scope hints, or placeholder
+  - Test plan checklist with `go test ./... -count=1` and scoped command when hints allow
+- `enrich_pr_llm()` — optional LiteLLM refinement when API keys set; silent fallback
+- `build_pr_draft()` — template then optional LLM
+- `render_pr_markdown()` — markdown with `# title`, `## Problem`, `## Solution`, `## Test plan`, `Fixes #N`
+- `write_pr_md()` → `artifacts/{run_id}/PR.md`
+
+#### Key decisions
+
+- Template-first: works in dry-run and CI without API keys or network push
+- Uses exported `changes.patch` content (not raw patch file) when `--patch-file` was applied
+- Separate `PR.md` artifact; no `gh pr create` in this issue (Backlog #10 / GitHub #11)
+
+#### Tests
+
+- `tests/test_pr_writer.py` — template without LLM, patch file list, mocked LLM merge, section rendering, artifact write
+
+#### CLI integration
+
+Runs after optional `--patch-file`, before pipeline-not-implemented exit:
+
+```python
+pr_draft = build_pr_draft(issue_ctx, settings, scope_hints=..., patch_text=..., commit_message=...)
+write_pr_md(ctx, pr_draft)
+```
+
+#### Dependencies on prior issues
+
+- Backlog #7 — `IssueContext`
+- Backlog #8 — `scope_hints` from `ScopeBundle`
+- Backlog #6 — optional `changes.patch` / commit message via `--patch-file`
+
+#### Out of scope
+
+- `gh pr create` — Backlog #10 / GitHub #11
+- LangGraph PR agent node
+- `pr_summary.json` separate artifact
+
+#### Verification
+
+```bash
+pytest -q && ruff check src tests
+```
+
+---
+
 ## Template for future issues
 
 Copy this block when appending the next implemented issue.
@@ -493,9 +556,9 @@ See `.env.example` and `config.py`. Minimum for current pipeline:
 | Variable | Required | Purpose |
 |----------|----------|---------|
 | `GITHUB_TOKEN` or `gh auth` | For real issue fetch | Issue metadata |
-| `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` | Optional | LLM scope enrichment only |
+| `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` | Optional | LLM scope + PR draft enrichment |
 | `GO_AGENT_LOG_LEVEL` | Optional | DEBUG/INFO/WARNING/ERROR |
 
 ---
 
-*Last updated: after Backlog #8 (GitHub #9) — scope hints and context builder stub.*
+*Last updated: after Backlog #9 (GitHub #10) — PR title/body generator.*
