@@ -26,6 +26,7 @@ Step-by-step record of what was built for each backlog item in [Go-PR-Bot](https
 | #16 Planner agent | [#17](https://github.com/DarshanCode2005/Go-PR-Bot/issues/17) | Done |
 | #17 Coder agent | [#18](https://github.com/DarshanCode2005/Go-PR-Bot/issues/18) | Done |
 | #18 Parallel coder | [#19](https://github.com/DarshanCode2005/Go-PR-Bot/issues/19) | Done |
+| #19 Integrator | [#20](https://github.com/DarshanCode2005/Go-PR-Bot/issues/20) | Done |
 
 ---
 
@@ -51,7 +52,8 @@ go-agent run --repo <owner/name> --issue <N>
   ├─ create_issue_branch()         → agent/issue-{N}-{slug}
   ├─ write_branch_meta()           → branch_meta.json
   ├─ build_proposed_patch()        → wave-scheduled parallel coder → proposed.patch + coder_meta.json
-  ├─ apply_patch_and_commit()      → auto coder patch or --patch-file dev path
+  ├─ integrate_file_patches()      → sequential apply + LLM merge → resolved.patch + integrator_meta.json
+  ├─ apply_patch_and_commit()      → resolved patch or --patch-file dev path
   ├─ build_pr_draft() + write_pr_md()    → PR.md
   ├─ [optional] maybe_create_pr()        → --no-dry-run --create-pr only
   │     push branch + gh pr create --draft → pr_meta.json, exit 0
@@ -60,7 +62,7 @@ go-agent run --repo <owner/name> --issue <N>
 
 **Approved repos:** `gin-gonic/gin`, `spf13/cobra`, `go-playground/validator`, `golangci/golangci-lint`
 
-**Test suite:** 144 tests, `pytest -q && ruff check src tests`
+**Test suite:** 149 tests, `pytest -q && ruff check src tests`
 
 ---
 
@@ -82,6 +84,8 @@ All artifacts live under `artifacts/{run_id}/`:
 | `plan.json` | Backlog #16 | Structured fix plan: files, steps, test_commands, acceptance_criteria, optional `file_dependencies` |
 | `proposed.patch` | Backlog #17 | Combined unified diff from coder (per-file LLM patches) |
 | `coder_meta.json` | Backlog #17 | Per-file patch metadata, `execution_waves`, combined diff |
+| `integrator_meta.json` | Backlog #19 | Conflict resolutions, `files_touched`, resolved patch |
+| `resolved.patch` | Backlog #19 | Unified diff after sequential apply / merge |
 | `branch_meta.json` | Backlog #5 | branch name, base SHA, default branch, issue info |
 | `changes.patch` | Backlog #6 | `git diff` from base SHA (after patch apply) |
 | `PR.md` | Backlog #9 | Draft PR title/body: Problem, Solution, Test plan, Fixes #N |
@@ -112,6 +116,7 @@ Shared cache: `workspaces/_cache/{owner__repo}/` (shallow clone + `meta.json` + 
 | `llm_client.py` | Shared LiteLLM `complete()` with model tier routing and retries |
 | `planner.py` | Strong-tier planner; Pydantic `FixPlan`; writes `plan.json` |
 | `coder.py` | Fast-tier per-file coder; SEARCH/REPLACE → unified diff; scope guard |
+| `integrator.py` | Sequential patch apply; LLM merge on overlapping hunks |
 | `context_builder.py` | Code graph, ranked context bundle, scope enrichment |
 | `pr_writer.py` | PR draft template + optional LLM; writes `PR.md` |
 | `github_pr.py` | Push branch + `gh pr create --draft`; writes `pr_meta.json` |
@@ -1111,6 +1116,51 @@ pytest -q && ruff check src tests
 
 ---
 
+### Backlog #19 — Integrator / conflict resolution pass
+
+**GitHub:** [#20](https://github.com/DarshanCode2005/Go-PR-Bot/issues/20)  
+**Commit:** (pending) `feat(integrator): sequential patch apply with LLM conflict merge (fixes #20)`  
+**PR:** (pending)
+
+#### What was built
+
+**`integrator.py`**
+
+- `integrate_file_patches()` — apply `FilePatch` list in plan order on clean worktree at `base_sha`
+- On `git apply` failure for a path, gather all patches for that file and call `merge_patches_with_llm()` once (fast tier, retry)
+- `_dependency_context`-style merge prompt: original file + all conflicting hunks
+- Reuses coder SEARCH/REPLACE parser and `normalize_llm_patch()`
+- `IntegratorResult` with `resolved_patch`, `conflicts`, `files_touched`
+- `write_integrator_artifact()` → `integrator_meta.json` + `resolved.patch`
+- Resets worktree to `base_sha` after exporting diff (idempotent final apply)
+
+**`cli.py`**
+
+- After coder artifacts: `integrate_file_patches()` → `write_integrator_artifact()` → `apply_patch_and_commit(resolved_patch)`
+- `IntegratorError` → exit 1; `--patch-file` skips integrator
+
+**`config.py`**
+
+- `integrator_max_merge_retries` (default `1`)
+
+#### Key decisions
+
+- Sequential apply detects real `git apply` conflicts (overlapping hunks on same file)
+- Merge LLM sees base content plus every conflicting patch body
+- Multiple patches per path preserved in `_order_file_patches()` (no dict overwrite)
+
+#### Tests
+
+- `tests/test_integrator.py` — disjoint apply, overlapping hunks merge (acceptance), merge prompt content, merge failure, artifacts
+
+#### Verification
+
+```bash
+pytest -q && ruff check src tests
+```
+
+---
+
 ## Template for future issues
 
 Copy this block when appending the next implemented issue.
@@ -1192,4 +1242,4 @@ See `.env.example` and `config.py`. Minimum for current pipeline:
 
 ---
 
-*Last updated: after Backlog #18 (GitHub #19) — parallel coder wave scheduling and file_dependencies.*
+*Last updated: after Backlog #19 (GitHub #20) — integrator conflict merge pass.*

@@ -47,6 +47,7 @@ class Settings(BaseSettings):
     llm_retry_base_delay: float = 1.0
     coder_max_file_chars: int = 60000
     coder_max_workers: int = 4
+    integrator_max_merge_retries: int = 1
 
     openai_api_key: str | None = Field(default=None, validation_alias="OPENAI_API_KEY")
     anthropic_api_key: str | None = Field(default=None, validation_alias="ANTHROPIC_API_KEY")

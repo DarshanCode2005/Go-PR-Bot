@@ -89,7 +89,18 @@ def commit_all(repo_path: Path, message: str) -> str:
 
 
 def export_changes_patch(repo_path: Path, base_sha: str, dest: Path) -> Path:
-    """Write git diff from base_sha to the index/working tree to dest."""
+    """Write git diff from base_sha to the working tree to dest."""
+    try:
+        untracked = run_git(
+            ["ls-files", "-o", "--exclude-standard"],
+            cwd=repo_path,
+        )
+        for path in untracked.splitlines():
+            if path.strip():
+                run_git(["add", "-N", path], cwd=repo_path)
+    except GitCommandError as exc:
+        raise PatchApplyError(f"git add -N failed: {exc}") from exc
+
     try:
         result = subprocess.run(
             ["git", "diff", base_sha],
