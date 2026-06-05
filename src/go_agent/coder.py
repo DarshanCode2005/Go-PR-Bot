@@ -353,6 +353,8 @@ def build_proposed_patch(
         file_patches.append(file_patch)
 
     combined = combine_file_patches(file_patches)
+    if not combined.strip():
+        raise CoderError("coder generated no changes for any planned file")
     log.info("Coder produced %d file patch(es)", len(file_patches))
     return CoderArtifact(
         issue_number=issue.number,
