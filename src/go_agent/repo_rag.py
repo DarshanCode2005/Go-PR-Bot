@@ -104,6 +104,18 @@ def _chunk_id(chunk: RagChunk) -> str:
     return f"{chunk.path}:{chunk.start_line}:{chunk.end_line}"
 
 
+def _effective_embed_model(settings: Settings) -> str:
+    model = settings.rag_embed_model
+    if settings.rag_embed_provider == "openai" and not model.startswith("text-embedding"):
+        logging.getLogger("go_agent").warning(
+            "rag_embed_model %r does not look like an OpenAI embedding model; "
+            "falling back to text-embedding-3-small",
+            model,
+        )
+        return "text-embedding-3-small"
+    return model
+
+
 def _embed_texts(texts: list[str], settings: Settings) -> list[list[float]]:
     if settings.rag_embed_provider == "openai":
         if not settings.openai_api_key:
@@ -113,9 +125,7 @@ def _embed_texts(texts: list[str], settings: Settings) -> list[list[float]]:
             import litellm
         except ImportError as exc:
             raise RagDepsNotFoundError("litellm is required for OpenAI embeddings") from exc
-        model = settings.rag_embed_model
-        if not model.startswith("text-embedding"):
-            model = "text-embedding-3-small"
+        model = _effective_embed_model(settings)
         response = litellm.embedding(model=model, input=texts)
         return [item["embedding"] for item in response.data]
 
@@ -160,7 +170,7 @@ def _index_is_ready(index_dir: Path, settings: Settings) -> bool:
         return False
     return (
         payload.get("embed_provider") == settings.rag_embed_provider
-        and payload.get("embed_model") == settings.rag_embed_model
+        and payload.get("embed_model") == _effective_embed_model(settings)
     )
 
 
@@ -214,7 +224,7 @@ def get_or_build_index(
                 "repo_head": repo_head,
                 "chunk_count": len(chunks),
                 "embed_provider": settings.rag_embed_provider,
-                "embed_model": settings.rag_embed_model,
+                "embed_model": _effective_embed_model(settings),
             },
             indent=2,
         )
