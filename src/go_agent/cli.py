@@ -12,6 +12,7 @@ from go_agent.constants import APPROVED_REPOS_HELP
 from go_agent.logging_config import configure_run_logging
 from go_agent.run_context import create_run_context
 from go_agent.branching import BranchError, create_issue_branch, write_branch_meta
+from go_agent.context_builder import prepare_scope, write_scope_hints
 from go_agent.github_issues import (
     ClosedIssueError,
     IssueFetchError,
@@ -136,6 +137,9 @@ def run(
             issue_ctx.labels,
             len(issue_ctx.comments),
         )
+        scope_bundle = prepare_scope(issue_ctx, settings)
+        write_scope_hints(ctx, scope_bundle)
+        logger.info("Scope hints: %s", scope_bundle.scope_hints[:10])
         branch = create_issue_branch(repo_path, issue, issue_ctx.title, logger)
         write_branch_meta(ctx, branch)
         logger.info(
