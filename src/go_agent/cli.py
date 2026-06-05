@@ -31,6 +31,7 @@ from go_agent.github_pr import PRCreateError, maybe_create_pr
 from go_agent.patches import PatchApplyError, apply_patch_and_commit
 from go_agent.pr_writer import build_pr_draft, write_pr_md
 from go_agent.repo_map import build_repo_map, write_repo_map
+from go_agent.coder import CoderError, build_proposed_patch, write_coder_artifact
 from go_agent.planner import PlanError, build_fix_plan, write_plan
 from go_agent.repo_rag import (
     build_rag_query,
@@ -255,7 +256,40 @@ def run(
 
     patch_text: str | None = None
     commit_message: str | None = None
-    if patch_file is not None:
+    if patch_file is None:
+        try:
+            coder_artifact = build_proposed_patch(
+                repo_path,
+                issue_ctx,
+                fix_plan,
+                context_bundle,
+                settings,
+                logger=logger,
+            )
+            write_coder_artifact(ctx, coder_artifact)
+            result = apply_patch_and_commit(
+                repo_path,
+                ctx,
+                coder_artifact.combined_patch,
+                issue,
+                issue_ctx.title[:50],
+                branch.base_sha,
+                logger,
+            )
+            patch_text = result.changes_patch_path.read_text(encoding="utf-8")
+            commit_message = result.commit_message
+            logger.info(
+                "Coder patch applied; commit %s; changes at %s",
+                result.commit_sha[:8],
+                result.changes_patch_path,
+            )
+        except CoderError as exc:
+            logger.error("Coder failed: %s", exc)
+            raise typer.Exit(code=1) from exc
+        except PatchApplyError as exc:
+            logger.error("Coder patch apply failed: %s", exc)
+            raise typer.Exit(code=1) from exc
+    elif patch_file is not None:
         try:
             patch_text = patch_file.read_text(encoding="utf-8")
             result = apply_patch_and_commit(
