@@ -248,12 +248,14 @@ def integrate_file_patches(
         diff_dest = Path(handle.name)
 
     try:
-        export_changes_patch(repo_path, base_sha, diff_dest)
-        resolved_patch = diff_dest.read_text(encoding="utf-8")
+        try:
+            export_changes_patch(repo_path, base_sha, diff_dest)
+            resolved_patch = diff_dest.read_text(encoding="utf-8")
+        except PatchApplyError as exc:
+            raise IntegratorError(str(exc)) from exc
     finally:
         diff_dest.unlink(missing_ok=True)
-
-    run_git(["reset", "--hard", base_sha], cwd=repo_path)
+        run_git(["reset", "--hard", base_sha], cwd=repo_path)
     log.info(
         "Integrator resolved %d file(s); %d conflict merge(s)",
         len(files_touched),
