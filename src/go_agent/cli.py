@@ -23,6 +23,7 @@ from go_agent.github_issues import (
 from go_agent.github_pr import PRCreateError, maybe_create_pr
 from go_agent.patches import PatchApplyError, apply_patch_and_commit
 from go_agent.pr_writer import build_pr_draft, write_pr_md
+from go_agent.repo_map import build_repo_map, write_repo_map
 from go_agent.workspace import CloneError, RepoNotAllowedError, assert_repo_allowed, ensure_repo_cloned
 
 _REPO_PATTERN = re.compile(r"^[\w.-]+/[\w.-]+$")
@@ -127,6 +128,15 @@ def run(
         raise typer.Exit(code=1) from exc
 
     logger.info("Repository ready at %s", repo_path)
+
+    repo_map = build_repo_map(repo_path, repo, settings)
+    write_repo_map(ctx, repo_map)
+    logger.info(
+        "Repo map: module=%s packages=%d tree_depth=%d",
+        repo_map.go_mod.module_path,
+        len(repo_map.top_level_packages),
+        repo_map.tree_depth,
+    )
 
     try:
         issue_ctx = fetch_issue_context(repo, issue, settings)
