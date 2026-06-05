@@ -29,7 +29,7 @@ class GraphNode(BaseModel):
 class GraphEdge(BaseModel):
     source: str
     target: str
-    kind: Literal["imports", "in_package", "tests", "rg_hit", "issue_hint"]
+    kind: Literal["imports", "in_package", "tests"]
 
 
 class CodeGraph(BaseModel):
@@ -163,7 +163,6 @@ def build_code_graph(
         node_id = ensure_file_node(path)
         if node_id not in seeds:
             seeds.append(node_id)
-        _add_edge(edges, edge_seen, node_id, node_id, "issue_hint")
 
     for hit in search_hits:
         if hit.path not in known:
@@ -171,7 +170,6 @@ def build_code_graph(
         node_id = ensure_file_node(hit.path)
         if node_id not in seeds:
             seeds.append(node_id)
-        _add_edge(edges, edge_seen, node_id, node_id, "rg_hit")
 
     by_dir: dict[str, list[str]] = {}
     for path in go_files:
@@ -259,8 +257,6 @@ def structural_summary(graph: CodeGraph, path: str) -> str:
 
 def edge_rationale(kind: str) -> str:
     mapping = {
-        "issue_hint": "issue hint",
-        "rg_hit": "ripgrep hit",
         "tests": "paired test",
         "in_package": "same package",
         "imports": "imports",
