@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     artifacts_dir: Path = Path("./artifacts")
     log_level: str = "INFO"
     max_fix_iterations: int = 5
+    max_issue_comments: int = 20
 
     openai_api_key: str | None = Field(default=None, validation_alias="OPENAI_API_KEY")
     anthropic_api_key: str | None = Field(default=None, validation_alias="ANTHROPIC_API_KEY")

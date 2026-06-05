@@ -5,6 +5,7 @@ from typer.testing import CliRunner
 
 from go_agent.cli import app
 from go_agent.config import clear_settings_cache
+from go_agent.github_issues import IssueContext
 
 runner = CliRunner()
 
@@ -20,7 +21,13 @@ def test_run_writes_branch_meta(tmp_path, monkeypatch, bare_repo_url: str):
     monkeypatch.setenv("GO_AGENT_ARTIFACTS_DIR", str(tmp_path / "artifacts"))
     monkeypatch.setenv("GO_AGENT_WORK_DIR", str(tmp_path / "workspaces"))
 
-    with patch("go_agent.cli.fetch_issue_title", return_value="Fix Stuff"):
+    issue_ctx = IssueContext(
+        repo="gin-gonic/gin",
+        number=99,
+        title="Fix Stuff",
+        state="open",
+    )
+    with patch("go_agent.cli.fetch_issue_context", return_value=issue_ctx):
         with patch("go_agent.workspace.github_url", return_value=bare_repo_url):
             result = runner.invoke(
                 app,
