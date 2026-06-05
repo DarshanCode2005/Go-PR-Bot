@@ -26,11 +26,11 @@ def enable_planner_mock(
 ) -> None:
     """Configure env + transport so CLI runs pass the planner step in tests."""
     from go_agent.config import clear_settings_cache
-    from go_agent.llm_client import set_completion_transport
 
     monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
     clear_settings_cache()
-    set_completion_transport(transport or (lambda **_: MOCK_PLAN_JSON))
+    effective_transport = transport or (lambda **_: MOCK_PLAN_JSON)
+    monkeypatch.setattr("go_agent.llm_client._TRANSPORT", effective_transport)
 
 
 def bump_bare_repo(bare_repo_url: str, tmp_path: Path, *, content: str = "v2\n") -> str:
