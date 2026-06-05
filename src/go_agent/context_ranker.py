@@ -6,7 +6,13 @@ from collections import deque
 
 from pydantic import BaseModel
 
-from go_agent.code_graph import CodeGraph, edge_rationale, neighbors, node_path
+from go_agent.code_graph import (
+    CodeGraph,
+    _test_pair_path,
+    edge_rationale,
+    neighbors,
+    node_path,
+)
 from go_agent.config import Settings
 from go_agent.repo_search import SearchHit
 
@@ -20,17 +26,6 @@ class RankedFile(BaseModel):
 
 def _hit_paths(search_hits: list[SearchHit]) -> set[str]:
     return {hit.path for hit in search_hits}
-
-
-def _test_pair_path(path: str) -> str | None:
-    if path.endswith("_test.go"):
-        return path[: -len("_test.go")] + ".go"
-    if path.endswith(".go") and not path.endswith("_test.go"):
-        parts = path.rsplit("/", 1)
-        if len(parts) == 2:
-            return f"{parts[0]}/{parts[1][:-3]}_test.go"
-        return f"{path[:-3]}_test.go"
-    return None
 
 
 def rank_files(
