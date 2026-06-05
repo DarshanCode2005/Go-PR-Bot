@@ -30,6 +30,12 @@ class Settings(BaseSettings):
     ripgrep_timeout: int = 30
     ripgrep_max_results: int = 50
     ripgrep_default_glob: str = "*.go"
+    context_max_chars: int = 80000
+    context_max_files: int = 15
+    context_graph_max_hops: int = 2
+    context_snippet_radius: int = 5
+    context_full_file_top_k: int = 3
+    context_summary_top_k: int = 5
 
     openai_api_key: str | None = Field(default=None, validation_alias="OPENAI_API_KEY")
     anthropic_api_key: str | None = Field(default=None, validation_alias="ANTHROPIC_API_KEY")

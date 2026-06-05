@@ -20,6 +20,7 @@ Step-by-step record of what was built for each backlog item in [Go-PR-Bot](https
 | #10 Create PR via gh | [#11](https://github.com/DarshanCode2005/Go-PR-Bot/issues/11) | Done |
 | #11 Repo file tree | [#12](https://github.com/DarshanCode2005/Go-PR-Bot/issues/12) | Done |
 | #12 Ripgrep search | [#13](https://github.com/DarshanCode2005/Go-PR-Bot/issues/13) | Done |
+| #13 Context builder | [#14](https://github.com/DarshanCode2005/Go-PR-Bot/issues/14) | Done |
 
 ---
 
@@ -39,6 +40,7 @@ go-agent run --repo <owner/name> --issue <N>
   ├─ ensure_issue_open_or_forced() → blocks closed issues unless --force
   ├─ write_issue_context()         → issue_context.json
   ├─ prepare_scope() + ripgrep search     → scope_hints.json + search_hits.json
+  ├─ build_context_bundle()             → code_graph.json + context_bundle.json
   ├─ create_issue_branch()         → agent/issue-{N}-{slug}
   ├─ write_branch_meta()           → branch_meta.json
   ├─ [optional] apply_patch_and_commit()  → --patch-file dev path
@@ -50,7 +52,7 @@ go-agent run --repo <owner/name> --issue <N>
 
 **Approved repos:** `gin-gonic/gin`, `spf13/cobra`, `go-playground/validator`, `golangci/golangci-lint`
 
-**Test suite:** 88 tests, `pytest -q && ruff check src tests`
+**Test suite:** 101 tests, `pytest -q && ruff check src tests`
 
 ---
 
@@ -66,6 +68,8 @@ All artifacts live under `artifacts/{run_id}/`:
 | `issue_context.json` | Backlog #7 | Full `IssueContext` (title, body, labels, state, comments) |
 | `scope_hints.json` | Backlog #8 | `ScopeBundle`: scope_hints, files (from search), issue_number, repo |
 | `search_hits.json` | Backlog #12 | Ripgrep hits: path, line_number, line_text, query |
+| `code_graph.json` | Backlog #13 | In-memory code graph: nodes, edges, seeds |
+| `context_bundle.json` | Backlog #13 | Ranked files with tiered content under char budget |
 | `branch_meta.json` | Backlog #5 | branch name, base SHA, default branch, issue info |
 | `changes.patch` | Backlog #6 | `git diff` from base SHA (when `--patch-file` used) |
 | `PR.md` | Backlog #9 | Draft PR title/body: Problem, Solution, Test plan, Fixes #N |
@@ -688,6 +692,92 @@ pytest -q && ruff check src tests
 
 ---
 
+### Backlog #13 — Context builder (issue + search → bundle)
+
+**GitHub:** [#14](https://github.com/DarshanCode2005/Go-PR-Bot/issues/14)  
+**Commit:** (pending) `feat(context): lightweight code graph, ranked context bundle, tiered packing (fixes #14)`  
+**PR:** (pending)
+
+#### What was built
+
+**`code_graph.py`**
+
+- `GraphNode`, `GraphEdge`, `CodeGraph` models
+- `build_code_graph()` — edges: `issue_hint`, `rg_hit`, `tests`, `in_package`, `imports`
+- Regex import parsing mapped via `go.mod` module path
+- Skips vendor, `.pb.go`, `_gen.go`, bindata files
+- `write_code_graph()` → `code_graph.json`
+
+**`context_ranker.py`**
+
+- `RankedFile` model
+- `rank_files()` — weighted BFS from graph seeds (100/70/40 by hop); +10 ripgrep boost
+- Always injects paired `*_test.go` when a source `.go` file is ranked
+
+**`context_builder.py`** (extended)
+
+- `ContextFileEntry`, `ContextBundle` models
+- `pack_context()` — tiered content: `full` → `summary` → `snippet` → `structural` with char budget downgrade
+- Optional LiteLLM one-paragraph file summary (falls back to snippet)
+- `build_context_bundle()` orchestrator; syncs `ScopeBundle.files` to ranked paths
+- `write_context_bundle()` → `context_bundle.json`
+
+**`config.py` / `.env.example`**
+
+- `context_max_chars` (80000), `context_max_files` (15), `context_graph_max_hops` (2)
+- `context_snippet_radius` (5), `context_full_file_top_k` (3), `context_summary_top_k` (5)
+
+#### Key decisions
+
+- Lightweight in-memory JSON graph (no Neo4j / `go/packages`) — Phase 1 per GitHub #14
+- Greedy packing with tier downgrade when a file exceeds remaining budget
+- Summary tier records actual tier when LLM unavailable (snippet fallback)
+
+#### Tests
+
+- `tests/test_code_graph.py` — test pairing, seeds, skip rules, artifact write
+- `tests/test_context_ranker.py` — BFS distance, test pairing, max files cap
+- `tests/test_context_builder.py` — budget packing, bundle build, LLM summary mock, artifact write
+
+#### CLI integration
+
+After search hits:
+
+```python
+code_graph, context_bundle = build_context_bundle(
+    repo_path, issue_ctx, scope_bundle, search_hits, settings
+)
+write_code_graph(ctx, code_graph)
+write_context_bundle(ctx, context_bundle)
+```
+
+#### Artifacts added/changed
+
+- `code_graph.json` — nodes, edges, seeds
+- `context_bundle.json` — ranked files with tier, rationale, content, char counts
+- `scope_hints.json` / `search_hits.json` — `files` list synced to bundle paths
+
+#### Dependencies on prior issues
+
+- Backlog #8 — `scope_hints`
+- Backlog #11 — cloned repo, `go.mod` module path
+- Backlog #12 — `search_hits` for seeds and snippet line numbers
+
+#### Out of scope
+
+- Neo4j / cross-run graph persistence
+- `go/packages` import analysis
+- Planner/coder agent consumption of bundle (later)
+- Embeddings RAG (Backlog #14 / GitHub #15)
+
+#### Verification
+
+```bash
+pytest -q && ruff check src tests
+```
+
+---
+
 ## Template for future issues
 
 Copy this block when appending the next implemented issue.
@@ -759,7 +849,9 @@ See `.env.example` and `config.py`. Minimum for current pipeline:
 | `GITHUB_TOKEN` or `gh auth` | For real issue fetch | Issue metadata |
 | `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` | Optional | LLM scope + PR draft enrichment |
 | `GO_AGENT_LOG_LEVEL` | Optional | DEBUG/INFO/WARNING/ERROR |
+| `GO_AGENT_CONTEXT_MAX_CHARS` | Optional | Context bundle char budget (default 80000) |
+| `GO_AGENT_CONTEXT_MAX_FILES` | Optional | Max ranked files in bundle (default 15) |
 
 ---
 
-*Last updated: after Backlog #12 (GitHub #13) — ripgrep search tool.*
+*Last updated: after Backlog #13 (GitHub #14) — context graph, ranked bundle, tiered packing.*
