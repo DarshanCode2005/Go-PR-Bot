@@ -148,7 +148,7 @@ def _get_chroma_collection(index_dir: Path, settings: Settings) -> Any:
     )
 
 
-def _index_is_ready(index_dir: Path) -> bool:
+def _index_is_ready(index_dir: Path, settings: Settings) -> bool:
     meta_path = index_dir / _INDEX_META
     if not meta_path.is_file():
         return False
@@ -156,7 +156,12 @@ def _index_is_ready(index_dir: Path) -> bool:
         payload = json.loads(meta_path.read_text(encoding="utf-8"))
     except json.JSONDecodeError:
         return False
-    return bool(payload.get("chunk_count", 0))
+    if not payload.get("chunk_count", 0):
+        return False
+    return (
+        payload.get("embed_provider") == settings.rag_embed_provider
+        and payload.get("embed_model") == settings.rag_embed_model
+    )
 
 
 def get_or_build_index(
@@ -171,7 +176,7 @@ def get_or_build_index(
     index_dir = _index_dir(settings, repo, repo_head)
     collection = _get_chroma_collection(index_dir, settings)
 
-    if _index_is_ready(index_dir) and collection.count() > 0:
+    if _index_is_ready(index_dir, settings) and collection.count() > 0:
         log.info("RAG index cache hit for %s at %s", repo, index_dir)
         return collection
 
