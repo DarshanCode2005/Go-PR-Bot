@@ -1,10 +1,12 @@
 import logging
 import uuid
+from unittest.mock import patch
 
 import pytest
 from typer.testing import CliRunner
 
 from go_agent.cli import app
+from go_agent.github_issues import IssueContext
 from helpers import enable_planner_mock
 from go_agent.config import Settings, clear_settings_cache
 from go_agent.logging_config import configure_run_logging
@@ -60,19 +62,28 @@ def test_run_log_written(tmp_path, monkeypatch):
     assert ctx.run_id in content
 
 
-def test_cli_run_creates_artifact_dir(tmp_path, monkeypatch):
+def test_cli_run_creates_artifact_dir(tmp_path, monkeypatch, bare_repo_url: str):
     monkeypatch.chdir(tmp_path)
     artifacts = tmp_path / "artifacts"
     monkeypatch.setenv("GO_AGENT_ARTIFACTS_DIR", str(artifacts))
     monkeypatch.setenv("GO_AGENT_WORK_DIR", str(tmp_path / "workspaces"))
     enable_planner_mock(monkeypatch)
-
-    result = runner.invoke(app, ["run", "--repo", "gin-gonic/gin", "--issue", "1"])
+    issue_ctx = IssueContext(
+        repo="gin-gonic/gin",
+        number=1,
+        title="Update readme",
+        state="open",
+    )
+    with patch("go_agent.cli.fetch_issue_context", return_value=issue_ctx):
+        with patch("go_agent.workspace.github_url", return_value=bare_repo_url):
+            result = runner.invoke(app, ["run", "--repo", "gin-gonic/gin", "--issue", "1"])
     assert result.exit_code == 1
 
     subdirs = [p for p in artifacts.iterdir() if p.is_dir()]
     assert len(subdirs) == 1
     run_log = subdirs[0] / "run.log"
     assert run_log.exists()
-    assert "Starting run" in run_log.read_text(encoding="utf-8")
-    assert "not implemented" in run_log.read_text(encoding="utf-8").lower()
+    log_text = run_log.read_text(encoding="utf-8")
+    assert "Starting run" in log_text
+    assert "not implemented" in log_text.lower()
+    assert (subdirs[0] / "proposed.patch").exists()

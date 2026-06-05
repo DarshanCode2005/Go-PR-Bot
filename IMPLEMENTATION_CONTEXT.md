@@ -24,6 +24,7 @@ Step-by-step record of what was built for each backlog item in [Go-PR-Bot](https
 | #14 RAG retrieval | [#15](https://github.com/DarshanCode2005/Go-PR-Bot/issues/15) | Done |
 | #15 LLM client wrapper | [#16](https://github.com/DarshanCode2005/Go-PR-Bot/issues/16) | Done |
 | #16 Planner agent | [#17](https://github.com/DarshanCode2005/Go-PR-Bot/issues/17) | Done |
+| #17 Coder agent | [#18](https://github.com/DarshanCode2005/Go-PR-Bot/issues/18) | Done |
 
 ---
 
@@ -48,7 +49,8 @@ go-agent run --repo <owner/name> --issue <N>
   ├─ build_fix_plan()                   → plan.json (fails run if planner cannot complete)
   ├─ create_issue_branch()         → agent/issue-{N}-{slug}
   ├─ write_branch_meta()           → branch_meta.json
-  ├─ [optional] apply_patch_and_commit()  → --patch-file dev path
+  ├─ build_proposed_patch()        → proposed.patch + coder_meta.json (skipped with --patch-file)
+  ├─ apply_patch_and_commit()      → auto coder patch or --patch-file dev path
   ├─ build_pr_draft() + write_pr_md()    → PR.md
   ├─ [optional] maybe_create_pr()        → --no-dry-run --create-pr only
   │     push branch + gh pr create --draft → pr_meta.json, exit 0
@@ -57,7 +59,7 @@ go-agent run --repo <owner/name> --issue <N>
 
 **Approved repos:** `gin-gonic/gin`, `spf13/cobra`, `go-playground/validator`, `golangci/golangci-lint`
 
-**Test suite:** 126 tests, `pytest -q && ruff check src tests`
+**Test suite:** 134 tests, `pytest -q && ruff check src tests`
 
 ---
 
@@ -77,8 +79,10 @@ All artifacts live under `artifacts/{run_id}/`:
 | `code_graph.json` | Backlog #13 | In-memory code graph: nodes, edges, seeds |
 | `context_bundle.json` | Backlog #13 | Ranked files with tiered content under char budget |
 | `plan.json` | Backlog #16 | Structured fix plan: files, steps, test_commands, acceptance_criteria |
+| `proposed.patch` | Backlog #17 | Combined unified diff from coder (per-file LLM patches) |
+| `coder_meta.json` | Backlog #17 | Per-file patch metadata and combined diff |
 | `branch_meta.json` | Backlog #5 | branch name, base SHA, default branch, issue info |
-| `changes.patch` | Backlog #6 | `git diff` from base SHA (when `--patch-file` used) |
+| `changes.patch` | Backlog #6 | `git diff` from base SHA (after patch apply) |
 | `PR.md` | Backlog #9 | Draft PR title/body: Problem, Solution, Test plan, Fixes #N |
 | `pr_meta.json` | Backlog #10 | Draft PR URL, title, branch (when `--create-pr`) |
 
@@ -106,7 +110,8 @@ Shared cache: `workspaces/_cache/{owner__repo}/` (shallow clone + `meta.json` + 
 | `issue_scope.py` | Heuristic + optional LLM scope hint extraction |
 | `llm_client.py` | Shared LiteLLM `complete()` with model tier routing and retries |
 | `planner.py` | Strong-tier planner; Pydantic `FixPlan`; writes `plan.json` |
-| `context_builder.py` | Stub: `prepare_scope`, `write_scope_hints` |
+| `coder.py` | Fast-tier per-file coder; SEARCH/REPLACE → unified diff; scope guard |
+| `context_builder.py` | Code graph, ranked context bundle, scope enrichment |
 | `pr_writer.py` | PR draft template + optional LLM; writes `PR.md` |
 | `github_pr.py` | Push branch + `gh pr create --draft`; writes `pr_meta.json` |
 | `repo_map.py` | Depth-limited file tree, go.mod parse, top-level packages |
@@ -983,6 +988,83 @@ pytest -q && ruff check src tests
 
 ---
 
+### Backlog #17 — Coder agent (per-file patch generation)
+
+**GitHub:** [#18](https://github.com/DarshanCode2005/Go-PR-Bot/issues/18)  
+**Commit:** (pending) `feat(coder): per-file patch generation from plan with scope guard (fixes #18)`  
+**PR:** (pending)
+
+#### What was built
+
+**`coder.py`**
+
+- `PlanSlice`, `FilePatch`, `CoderArtifact` Pydantic models
+- Search-replace parser/applier (`--- SEARCH` / `+++ REPLACE`)
+- `unified_diff_for_file()` via `git diff --no-index` for git-apply-compatible output
+- `validate_patch_scope()` — refuses paths outside `plan.files`
+- `generate_file_patch()` — fast-tier LLM per file, one retry on parse/apply failure
+- `build_proposed_patch()` — loops `plan.files`, merges into `combined_patch`
+- `write_coder_artifact()` → `proposed.patch` + `coder_meta.json`
+- `CoderError` — run fails when coder cannot complete
+
+**`cli.py`**
+
+- Coder runs after branch when `--patch-file` is not set
+- Writes artifacts, applies patch via `apply_patch_and_commit()`
+- `CoderError` and patch apply failures exit code 1
+- `--patch-file` dev path unchanged (skips coder)
+
+**`config.py`**
+
+- `coder_max_file_chars` (default 60000)
+
+**`tests/helpers.py`**
+
+- `enable_agent_mocks()` — dispatches mock LLM responses for planner, scope, summary, and coder
+- `enable_planner_mock()` alias retained
+
+#### Key decisions
+
+- One LLM call per `plan.files` entry (plan slice + bundle excerpt + on-disk source)
+- Primary LLM output format: SEARCH/REPLACE blocks; unified diff accepted as fallback
+- Missing planned files fail the run (integral consistency with planner)
+- Fast tier sufficient for single-file edits
+
+#### Tests
+
+- `tests/test_coder.py` — parser, applier, scope guard, mock transport, git apply --check, artifacts
+- CLI integration tests updated with `enable_agent_mocks()` and bare-repo fixtures
+
+#### CLI integration
+
+```python
+if patch_file is None:
+    coder_artifact = build_proposed_patch(repo_path, issue_ctx, fix_plan, context_bundle, settings, logger=logger)
+    write_coder_artifact(ctx, coder_artifact)
+    result = apply_patch_and_commit(repo_path, ctx, coder_artifact.combined_patch, ...)
+```
+
+#### Dependencies on prior issues
+
+- Backlog #16 — `plan.json` / `FixPlan`
+- Backlog #13 — `context_bundle.json`
+- Backlog #15 — `llm_client.complete()` fast tier
+- Backlog #6 — `patches.apply_patch_and_commit()`
+
+#### Out of scope
+
+- LangGraph parallel file workers
+- Multi-file edits in a single LLM call
+- Auto-fix loop on `git apply` failure
+
+#### Verification
+
+```bash
+pytest -q && ruff check src tests
+```
+
+---
+
 ## Template for future issues
 
 Copy this block when appending the next implemented issue.
@@ -1064,4 +1146,4 @@ See `.env.example` and `config.py`. Minimum for current pipeline:
 
 ---
 
-*Last updated: after Backlog #16 (GitHub #17) — planner agent and plan.json artifact.*
+*Last updated: after Backlog #17 (GitHub #18) — coder agent and proposed.patch artifact.*
