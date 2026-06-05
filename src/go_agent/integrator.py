@@ -122,7 +122,7 @@ def merge_patches_with_llm(
         raise IntegratorError("LLM API key required for conflict merge")
 
     messages = build_merge_messages(path, base_content, patches)
-    max_attempts = max(settings.integrator_max_merge_retries, 1) + 1
+    max_attempts = settings.integrator_max_merge_retries + 1
     last_error: IntegratorError | None = None
 
     for attempt in range(max_attempts):
