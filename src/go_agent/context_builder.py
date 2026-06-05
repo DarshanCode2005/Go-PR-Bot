@@ -13,6 +13,7 @@ from go_agent.config import Settings
 from go_agent.context_ranker import RankedFile, rank_files
 from go_agent.github_issues import IssueContext
 from go_agent.issue_scope import build_scope_hints
+from go_agent.llm_client import complete
 from go_agent.repo_search import (
     RipgrepError,
     RipgrepNotFoundError,
@@ -130,28 +131,18 @@ def _snippet_content(
 
 
 def _summarize_file(path: str, content: str, settings: Settings) -> str | None:
-    if not settings.openai_api_key and not settings.anthropic_api_key:
-        return None
-    try:
-        import litellm
-    except ImportError:
-        return None
-
     prompt = (
         "Summarize this Go source file in one paragraph for a coding agent fixing a GitHub issue. "
         "Focus on exports, key types, and behavior.\n\n"
         f"File: {path}\n\n{content[:8000]}"
     )
-    try:
-        response = litellm.completion(
-            model=settings.model_fast,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0,
-        )
-        summary = (response.choices[0].message.content or "").strip()
-        return summary or None
-    except Exception:
-        return None
+    summary = complete(
+        messages=[{"role": "user", "content": prompt}],
+        tier="fast",
+        settings=settings,
+        temperature=0,
+    )
+    return (summary or "").strip() or None
 
 
 def _load_tier_content(

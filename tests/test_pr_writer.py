@@ -7,6 +7,7 @@ import pytest
 
 from go_agent.config import Settings, clear_settings_cache
 from go_agent.github_issues import IssueContext
+from go_agent.llm_client import set_completion_transport
 from go_agent.pr_writer import (
     PRDraft,
     build_pr_draft,
@@ -33,7 +34,9 @@ index 0000000..1111111 100644
 @pytest.fixture(autouse=True)
 def _clear_settings_cache():
     clear_settings_cache()
+    set_completion_transport(None)
     yield
+    set_completion_transport(None)
     clear_settings_cache()
 
 
@@ -79,6 +82,22 @@ def test_build_pr_draft_with_mocked_llm():
     with patch("go_agent.pr_writer.enrich_pr_llm", return_value=enriched):
         draft = build_pr_draft(issue, settings, scope_hints=["context.go"])
     assert draft.title == enriched.title
+    assert "nil guard" in draft.solution.lower()
+
+
+def test_build_pr_draft_with_mock_transport(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    issue = _issue_from_fixture("gin_router.md")
+    settings = Settings()
+    set_completion_transport(
+        lambda **_: (
+            '{"title":"fix: Guard nil context in BindJSON (fixes #42)",'
+            '"problem":"Nil context causes panic in BindJSON.",'
+            '"solution":"Add nil guard before binding JSON.",'
+            '"test_plan":"- [ ] go test ./... -count=1"}'
+        )
+    )
+    draft = build_pr_draft(issue, settings, scope_hints=["context.go"])
     assert "nil guard" in draft.solution.lower()
 
 

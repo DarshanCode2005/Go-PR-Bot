@@ -7,6 +7,7 @@ import re
 
 from go_agent.config import Settings
 from go_agent.github_issues import IssueContext
+from go_agent.llm_client import complete
 
 MAX_SCOPE_HINTS = 50
 
@@ -99,28 +100,21 @@ def enrich_scope_hints_llm(
     settings: Settings,
 ) -> list[str]:
     """Optionally ask a fast LLM for additional scope hints; fallback to heuristics on failure."""
-    if not settings.openai_api_key and not settings.anthropic_api_key:
-        return hints
-
-    try:
-        import litellm
-    except ImportError:
-        return hints
-
     prompt = (
         "Extract additional Go code scope hints (file paths, func names, packages, error strings) "
         "from this GitHub issue. Return JSON only: {\"scope_hints\": [\"...\"]}.\n\n"
         f"Title: {issue.title}\n\nBody:\n{issue.body[:2000]}\n\n"
         f"Existing hints: {hints[:20]}"
     )
-    model = settings.model_fast
     try:
-        response = litellm.completion(
-            model=model,
+        content = complete(
             messages=[{"role": "user", "content": prompt}],
+            tier="fast",
+            settings=settings,
             temperature=0,
         )
-        content = response.choices[0].message.content or ""
+        if not content:
+            return hints
         start = content.find("{")
         end = content.rfind("}")
         if start == -1 or end == -1:
