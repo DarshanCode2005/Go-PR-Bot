@@ -246,7 +246,6 @@ def integrate_file_patches(
             diff_dest = Path(handle.name)
 
         try:
-            run_git(["add", "-A"], cwd=repo_path)
             export_changes_patch(repo_path, base_sha, diff_dest)
             resolved_patch = diff_dest.read_text(encoding="utf-8")
         except PatchApplyError as exc:
