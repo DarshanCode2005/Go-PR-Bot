@@ -215,7 +215,8 @@ def _dependency_context_for_file(
         dep_patch = completed.get(dep)
         if dep_patch is not None:
             dep_content = _apply_patch_to_content(dep, dep_content, dep_patch)
-        parts.append(f"### {dep} (after planned edit)\n{dep_content[:4000]}")
+        char_limit = min(settings.coder_max_file_chars, 8000)
+        parts.append(f"### {dep} (after planned edit)\n{dep_content[:char_limit]}")
     return "\n\n".join(parts) if parts else None
 
 
