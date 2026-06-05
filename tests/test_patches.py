@@ -13,6 +13,7 @@ from go_agent.config import Settings, clear_settings_cache
 from go_agent.constants import APPROVED_REPOS
 from go_agent.git_util import run_git
 from go_agent.logging_config import configure_run_logging
+from go_agent.github_issues import IssueContext
 from go_agent.patches import (
     PatchApplyError,
     apply_patch_and_commit,
@@ -172,7 +173,13 @@ def test_cli_patch_file(tmp_path, monkeypatch, bare_repo_url: str):
     patch_path = tmp_path / "fix.patch"
     patch_path.write_text(README_PATCH, encoding="utf-8")
 
-    with patch("go_agent.cli.fetch_issue_title", return_value="Update readme"):
+    issue_ctx = IssueContext(
+        repo="gin-gonic/gin",
+        number=42,
+        title="Update readme",
+        state="open",
+    )
+    with patch("go_agent.cli.fetch_issue_context", return_value=issue_ctx):
         with patch("go_agent.workspace.github_url", return_value=bare_repo_url):
             result = runner.invoke(
                 app,

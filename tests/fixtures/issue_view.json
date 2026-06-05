@@ -1,0 +1,21 @@
+{
+  "title": "Fix router panic on nil context",
+  "body": "Steps to reproduce:\n1. Call Handler without context\n2. Observe panic",
+  "state": "OPEN",
+  "labels": [
+    {"name": "bug", "color": "d73a4a"},
+    {"name": "help wanted", "color": "008672"}
+  ],
+  "comments": [
+    {
+      "author": {"login": "alice"},
+      "body": "I can reproduce on v1.9",
+      "createdAt": "2024-01-01T00:00:00Z"
+    },
+    {
+      "author": {"login": "bob"},
+      "body": "Likely in context.go",
+      "createdAt": "2024-01-02T00:00:00Z"
+    }
+  ]
+}

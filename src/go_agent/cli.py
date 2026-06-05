@@ -12,7 +12,13 @@ from go_agent.constants import APPROVED_REPOS_HELP
 from go_agent.logging_config import configure_run_logging
 from go_agent.run_context import create_run_context
 from go_agent.branching import BranchError, create_issue_branch, write_branch_meta
-from go_agent.github_issues import IssueFetchError, fetch_issue_title
+from go_agent.github_issues import (
+    ClosedIssueError,
+    IssueFetchError,
+    ensure_issue_open_or_forced,
+    fetch_issue_context,
+    write_issue_context,
+)
 from go_agent.patches import PatchApplyError, apply_patch_and_commit
 from go_agent.workspace import CloneError, RepoNotAllowedError, assert_repo_allowed, ensure_repo_cloned
 
@@ -77,6 +83,11 @@ def run(
         exists=True,
         readable=True,
     ),
+    force: bool = typer.Option(
+        False,
+        "--force",
+        help="Proceed when the GitHub issue is closed",
+    ),
 ) -> None:
     """Run the agent pipeline on a GitHub issue.
 
@@ -115,8 +126,17 @@ def run(
     logger.info("Repository ready at %s", repo_path)
 
     try:
-        issue_title = fetch_issue_title(repo, issue, settings)
-        branch = create_issue_branch(repo_path, issue, issue_title, logger)
+        issue_ctx = fetch_issue_context(repo, issue, settings)
+        ensure_issue_open_or_forced(issue_ctx, force=force, logger=logger)
+        write_issue_context(ctx, issue_ctx)
+        logger.info(
+            "Issue #%s state=%s labels=%s comments=%d",
+            issue_ctx.number,
+            issue_ctx.state,
+            issue_ctx.labels,
+            len(issue_ctx.comments),
+        )
+        branch = create_issue_branch(repo_path, issue, issue_ctx.title, logger)
         write_branch_meta(ctx, branch)
         logger.info(
             "Branch %s at base %s (default %s)",
@@ -124,6 +144,9 @@ def run(
             branch.base_sha[:8],
             branch.default_branch,
         )
+    except ClosedIssueError as exc:
+        logger.error("%s", exc)
+        raise typer.Exit(code=2) from exc
     except IssueFetchError as exc:
         logger.error("%s", exc)
         raise typer.Exit(code=1) from exc
@@ -139,7 +162,7 @@ def run(
                 ctx,
                 patch_text,
                 issue,
-                issue_title[:50],
+                issue_ctx.title[:50],
                 branch.base_sha,
                 logger,
             )
