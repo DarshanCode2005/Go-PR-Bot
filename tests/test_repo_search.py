@@ -110,6 +110,25 @@ def test_search_repo_truncated(tmp_path):
             response = search_repo(repo, "line", Settings(ripgrep_max_results=1))
 
     assert response.truncated is True
+    assert "--max-total-count" in run.call_args[0][0]
+
+
+def test_search_repo_caps_total_hits_across_files(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    stdout = "a.go:1:line\nb.go:1:line\nc.go:1:line\n"
+    with patch("go_agent.repo_search.shutil.which", return_value="/usr/bin/rg"):
+        with patch("go_agent.repo_search.subprocess.run") as run:
+            run.return_value = subprocess.CompletedProcess(
+                args=["rg"],
+                returncode=0,
+                stdout=stdout,
+                stderr="",
+            )
+            response = search_repo(repo, "line", Settings(ripgrep_max_results=2))
+
+    assert len(response.hits) == 2
+    assert response.truncated is True
 
 
 def test_search_scope_hints_dedupes(tmp_path):

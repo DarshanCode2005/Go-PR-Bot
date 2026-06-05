@@ -64,7 +64,7 @@ def _build_rg_args(
         "--line-number",
         "--no-heading",
         "--fixed-strings",
-        "--max-count",
+        "--max-total-count",
         str(max_results),
     ]
     if glob_pattern:
@@ -118,11 +118,12 @@ def search_repo(
         if hit is not None:
             hits.append(hit)
 
+    truncated = len(hits) >= limit
     return SearchResponse(
         query=query,
         glob=glob_pattern,
-        hits=hits,
-        truncated=len(hits) >= limit,
+        hits=hits[:limit],
+        truncated=truncated,
     )
 
 
