@@ -1,14 +1,36 @@
-"""Test helpers for git fixtures."""
+"""Test helpers for git fixtures and planner mocks."""
 
 from __future__ import annotations
 
 import shutil
 import subprocess
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
+
+MOCK_PLAN_JSON = (
+    '{"files":["context.go"],"steps":["Add nil guard"],'
+    '"test_commands":["go test ./... -count=1"],'
+    '"acceptance_criteria":["Tests pass"]}'
+)
 
 
 def run_git(args: list[str], *, cwd: Path) -> None:
     subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True)
+
+
+def enable_planner_mock(
+    monkeypatch: Any,
+    *,
+    transport: Callable[..., str] | None = None,
+) -> None:
+    """Configure env + transport so CLI runs pass the planner step in tests."""
+    from go_agent.config import clear_settings_cache
+
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    clear_settings_cache()
+    effective_transport = transport or (lambda **_: MOCK_PLAN_JSON)
+    monkeypatch.setattr("go_agent.llm_client._TRANSPORT", effective_transport)
 
 
 def bump_bare_repo(bare_repo_url: str, tmp_path: Path, *, content: str = "v2\n") -> str:

@@ -31,6 +31,7 @@ from go_agent.github_pr import PRCreateError, maybe_create_pr
 from go_agent.patches import PatchApplyError, apply_patch_and_commit
 from go_agent.pr_writer import build_pr_draft, write_pr_md
 from go_agent.repo_map import build_repo_map, write_repo_map
+from go_agent.planner import PlanError, build_fix_plan, write_plan
 from go_agent.repo_rag import (
     build_rag_query,
     merge_search_hits,
@@ -217,6 +218,20 @@ def run(
             context_bundle.total_chars,
             context_bundle.budget_chars,
         )
+        fix_plan = build_fix_plan(
+            issue_ctx,
+            context_bundle,
+            scope_bundle.scope_hints,
+            settings,
+            logger=logger,
+        )
+        write_plan(ctx, fix_plan)
+        logger.info(
+            "Fix plan: %d files, %d steps, %d test commands",
+            len(fix_plan.files),
+            len(fix_plan.steps),
+            len(fix_plan.test_commands),
+        )
         branch = create_issue_branch(repo_path, issue, issue_ctx.title, logger)
         write_branch_meta(ctx, branch)
         logger.info(
@@ -230,6 +245,9 @@ def run(
         raise typer.Exit(code=2) from exc
     except IssueFetchError as exc:
         logger.error("%s", exc)
+        raise typer.Exit(code=1) from exc
+    except PlanError as exc:
+        logger.error("Planner failed: %s", exc)
         raise typer.Exit(code=1) from exc
     except BranchError as exc:
         logger.error("Branch creation failed: %s", exc)
