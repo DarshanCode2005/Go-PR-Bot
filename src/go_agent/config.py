@@ -27,6 +27,9 @@ class Settings(BaseSettings):
     max_issue_comments: int = 20
     repo_map_max_depth: int = 4
     repo_map_skip_vendor: bool = True
+    ripgrep_timeout: int = 30
+    ripgrep_max_results: int = 50
+    ripgrep_default_glob: str = "*.go"
 
     openai_api_key: str | None = Field(default=None, validation_alias="OPENAI_API_KEY")
     anthropic_api_key: str | None = Field(default=None, validation_alias="ANTHROPIC_API_KEY")

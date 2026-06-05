@@ -19,6 +19,7 @@ Step-by-step record of what was built for each backlog item in [Go-PR-Bot](https
 | #9 PR generator | [#10](https://github.com/DarshanCode2005/Go-PR-Bot/issues/10) | Done |
 | #10 Create PR via gh | [#11](https://github.com/DarshanCode2005/Go-PR-Bot/issues/11) | Done |
 | #11 Repo file tree | [#12](https://github.com/DarshanCode2005/Go-PR-Bot/issues/12) | Done |
+| #12 Ripgrep search | [#13](https://github.com/DarshanCode2005/Go-PR-Bot/issues/13) | Done |
 
 ---
 
@@ -37,8 +38,7 @@ go-agent run --repo <owner/name> --issue <N>
   ├─ fetch_issue_context()         → IssueContext via gh or PyGithub
   ├─ ensure_issue_open_or_forced() → blocks closed issues unless --force
   ├─ write_issue_context()         → issue_context.json
-  ├─ prepare_scope()               → heuristic (+ optional LLM) scope hints
-  ├─ write_scope_hints()           → scope_hints.json
+  ├─ prepare_scope() + ripgrep search     → scope_hints.json + search_hits.json
   ├─ create_issue_branch()         → agent/issue-{N}-{slug}
   ├─ write_branch_meta()           → branch_meta.json
   ├─ [optional] apply_patch_and_commit()  → --patch-file dev path
@@ -50,7 +50,7 @@ go-agent run --repo <owner/name> --issue <N>
 
 **Approved repos:** `gin-gonic/gin`, `spf13/cobra`, `go-playground/validator`, `golangci/golangci-lint`
 
-**Test suite:** 77 tests, `pytest -q && ruff check src tests`
+**Test suite:** 88 tests, `pytest -q && ruff check src tests`
 
 ---
 
@@ -64,7 +64,8 @@ All artifacts live under `artifacts/{run_id}/`:
 | `repo_meta.json` | Backlog #4 | repo, remote HEAD SHA, cache hit, paths |
 | `repo_map.json` | Backlog #11 | File tree, go.mod module path, top-level packages |
 | `issue_context.json` | Backlog #7 | Full `IssueContext` (title, body, labels, state, comments) |
-| `scope_hints.json` | Backlog #8 | `ScopeBundle`: scope_hints, issue_number, repo |
+| `scope_hints.json` | Backlog #8 | `ScopeBundle`: scope_hints, files (from search), issue_number, repo |
+| `search_hits.json` | Backlog #12 | Ripgrep hits: path, line_number, line_text, query |
 | `branch_meta.json` | Backlog #5 | branch name, base SHA, default branch, issue info |
 | `changes.patch` | Backlog #6 | `git diff` from base SHA (when `--patch-file` used) |
 | `PR.md` | Backlog #9 | Draft PR title/body: Problem, Solution, Test plan, Fixes #N |
@@ -96,6 +97,7 @@ Shared cache: `workspaces/_cache/{owner__repo}/` (shallow clone + `meta.json`)
 | `pr_writer.py` | PR draft template + optional LLM; writes `PR.md` |
 | `github_pr.py` | Push branch + `gh pr create --draft`; writes `pr_meta.json` |
 | `repo_map.py` | Depth-limited file tree, go.mod parse, top-level packages |
+| `repo_search.py` | Ripgrep wrapper; scope-hint batch search |
 
 ---
 
@@ -618,6 +620,74 @@ pytest -q && ruff check src tests
 
 ---
 
+### Backlog #12 — Ripgrep search tool
+
+**GitHub:** [#13](https://github.com/DarshanCode2005/Go-PR-Bot/issues/13)  
+**Commit:** (pending) `feat(search): add ripgrep wrapper and scope-hint search integration (fixes #13)`  
+**PR:** (pending)
+
+#### What was built
+
+**`repo_search.py`**
+
+- `SearchHit`, `SearchResponse` models
+- `search_repo()` — `rg --fixed-strings --line-number --max-count` with configurable timeout
+- `search_scope_hints()` — batch search deduped scope hints (max 10 queries)
+- `RipgrepError` / `RipgrepNotFoundError`
+
+**`config.py`**
+
+- `ripgrep_timeout` (default 30s)
+- `ripgrep_max_results` (default 50)
+- `ripgrep_default_glob` (default `*.go`)
+- Reuses `repo_map_skip_vendor` for `!vendor/**` and `!.git/**` globs
+
+**`context_builder.py`**
+
+- `build_scope_with_search()` — hints + ripgrep enrichment
+- `enrich_scope_from_search()` — populates `ScopeBundle.files`; non-fatal on missing `rg`
+- `write_search_hits()` → `search_hits.json`
+
+#### Key decisions
+
+- Literal (`--fixed-strings`) search for scope hints — safer than regex
+- Missing `rg` or search failure logs warning and continues (pipeline usable in CI)
+- Full file ranking deferred to Backlog #13 / GitHub #14
+
+#### Tests
+
+- `tests/test_repo_search.py` — line parse, hits, no match, timeout, truncated, dedupe
+- `tests/test_context_builder.py` — `build_scope_with_search`, `write_search_hits`
+
+#### CLI integration
+
+After issue fetch:
+
+```python
+scope_bundle, search_hits = build_scope_with_search(issue_ctx, repo_path, settings, logger=logger)
+write_scope_hints(ctx, scope_bundle)
+write_search_hits(ctx, scope_bundle, search_hits)
+```
+
+#### Dependencies on prior issues
+
+- Backlog #8 — `scope_hints` from issue text
+- Backlog #11 — cloned repo at `repo_path`
+
+#### Out of scope
+
+- `context_bundle.json` file ranking (Backlog #13 / GitHub #14)
+- MCP `repo_search` tool exposure
+- Regex / multiline ripgrep modes
+
+#### Verification
+
+```bash
+pytest -q && ruff check src tests
+```
+
+---
+
 ## Template for future issues
 
 Copy this block when appending the next implemented issue.
@@ -692,4 +762,4 @@ See `.env.example` and `config.py`. Minimum for current pipeline:
 
 ---
 
-*Last updated: after Backlog #11 (GitHub #12) — repo file tree and go.mod summary.*
+*Last updated: after Backlog #12 (GitHub #13) — ripgrep search tool.*
