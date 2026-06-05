@@ -168,3 +168,49 @@ def test_write_plan_artifact(tmp_path, monkeypatch):
     payload = json.loads(path.read_text(encoding="utf-8"))
     assert payload["issue_number"] == 42
     assert payload["files"] == ["context.go"]
+
+
+def test_fix_plan_file_dependencies_valid():
+    plan = FixPlan(
+        issue_number=42,
+        repo="gin-gonic/gin",
+        files=["pkg/foo.go", "pkg/bar.go"],
+        steps=["Update foo then bar"],
+        test_commands=["go test ./... -count=1"],
+        acceptance_criteria=["Tests pass"],
+        file_dependencies={"pkg/bar.go": ["pkg/foo.go"]},
+    )
+    assert plan.file_dependencies == {"pkg/bar.go": ["pkg/foo.go"]}
+
+
+def test_fix_plan_rejects_unknown_dependency():
+    with pytest.raises(ValidationError, match="unknown file"):
+        FixPlan.model_validate(
+            {
+                "issue_number": 42,
+                "repo": "gin-gonic/gin",
+                "files": ["pkg/foo.go"],
+                "steps": ["fix"],
+                "test_commands": ["go test ./... -count=1"],
+                "acceptance_criteria": ["done"],
+                "file_dependencies": {"pkg/foo.go": ["pkg/missing.go"]},
+            }
+        )
+
+
+def test_fix_plan_rejects_cycle():
+    with pytest.raises(ValidationError, match="cycle"):
+        FixPlan.model_validate(
+            {
+                "issue_number": 42,
+                "repo": "gin-gonic/gin",
+                "files": ["pkg/a.go", "pkg/b.go"],
+                "steps": ["fix"],
+                "test_commands": ["go test ./... -count=1"],
+                "acceptance_criteria": ["done"],
+                "file_dependencies": {
+                    "pkg/a.go": ["pkg/b.go"],
+                    "pkg/b.go": ["pkg/a.go"],
+                },
+            }
+        )

@@ -5,13 +5,14 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from go_agent.config import Settings
 from go_agent.context_builder import ContextBundle
 from go_agent.github_issues import IssueContext
 from go_agent.llm_client import complete, llm_available
 from go_agent.run_context import RunContext
+from go_agent.utils import normalize_file_path
 from go_agent.workspace import repo_slug
 
 PLANNER_SYSTEM_PROMPT = """You are a senior Go open-source maintainer planning a minimal fix for a GitHub issue.
@@ -21,6 +22,8 @@ Return JSON only (no markdown fences) with exactly these keys:
 - steps: ordered list of concrete implementation steps
 - test_commands: list of shell commands to verify the fix (must include go test)
 - acceptance_criteria: list of verifiable conditions for done
+- file_dependencies: optional map of file path -> list of paths that file depends on
+  (e.g. {"pkg/bar.go": ["pkg/foo.go"]} when bar must be coded after foo). Omit or {} if independent.
 
 Be specific to the issue and supplied code context. Prefer the smallest correct change."""
 
@@ -34,6 +37,27 @@ class PlanError(RuntimeError):
     """Raised when fix plan cannot be built or validated."""
 
 
+def _detect_dependency_cycle(files: list[str], dependencies: dict[str, list[str]]) -> None:
+    graph: dict[str, list[str]] = {path: list(dependencies.get(path, [])) for path in files}
+    visiting: set[str] = set()
+    visited: set[str] = set()
+
+    def visit(node: str) -> None:
+        if node in visiting:
+            msg = f"file_dependencies contains a cycle involving {node}"
+            raise ValueError(msg)
+        if node in visited:
+            return
+        visiting.add(node)
+        for dep in graph.get(node, []):
+            visit(dep)
+        visiting.remove(node)
+        visited.add(node)
+
+    for path in files:
+        visit(path)
+
+
 class FixPlan(BaseModel):
     issue_number: int
     repo: str
@@ -41,6 +65,7 @@ class FixPlan(BaseModel):
     steps: list[str]
     test_commands: list[str]
     acceptance_criteria: list[str]
+    file_dependencies: dict[str, list[str]] = Field(default_factory=dict)
 
     @field_validator("files")
     @classmethod
@@ -79,6 +104,44 @@ class FixPlan(BaseModel):
             msg = "test_commands must include at least one go test command"
             raise ValueError(msg)
         return cleaned
+
+    @model_validator(mode="after")
+    def validate_file_dependencies(self) -> FixPlan:
+        canonical = {normalize_file_path(path): path for path in self.files}
+        normalized_deps: dict[str, list[str]] = {}
+
+        for raw_key, raw_values in self.file_dependencies.items():
+            key = normalize_file_path(raw_key)
+            if key not in canonical:
+                msg = f"file_dependencies key {raw_key!r} is not listed in files"
+                raise ValueError(msg)
+            deps: list[str] = []
+            for raw_dep in raw_values:
+                dep = normalize_file_path(raw_dep)
+                if dep not in canonical:
+                    msg = f"file_dependencies for {raw_key!r} references unknown file {raw_dep!r}"
+                    raise ValueError(msg)
+                if dep == key:
+                    msg = f"file {raw_key!r} cannot depend on itself"
+                    raise ValueError(msg)
+                canonical_dep = canonical[dep]
+                if canonical_dep not in deps:
+                    deps.append(canonical_dep)
+            normalized_deps[canonical[key]] = deps
+
+        ordered_files = [canonical[normalize_file_path(path)] for path in self.files]
+        dep_lookup = {
+            normalize_file_path(path): [
+                normalize_file_path(item) for item in normalized_deps.get(path, [])
+            ]
+            for path in ordered_files
+        }
+        _detect_dependency_cycle(
+            [normalize_file_path(path) for path in ordered_files],
+            dep_lookup,
+        )
+        object.__setattr__(self, "file_dependencies", normalized_deps)
+        return self
 
 
 def _load_skill_text(repo: str) -> str:
@@ -211,7 +274,8 @@ def build_fix_plan(
             scope_hints,
             correction=(
                 f"Previous output was invalid: {first_error}. "
-                "Return valid JSON only with keys files, steps, test_commands, acceptance_criteria."
+                "Return valid JSON only with keys files, steps, test_commands, "
+                "acceptance_criteria, and optional file_dependencies."
             ),
         )
         try:
