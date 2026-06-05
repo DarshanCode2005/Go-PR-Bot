@@ -13,7 +13,10 @@ from go_agent.logging_config import configure_run_logging
 from go_agent.run_context import create_run_context
 from go_agent.branching import BranchError, create_issue_branch, write_branch_meta
 from go_agent.context_builder import (
+    build_context_bundle,
     build_scope_with_search,
+    write_code_graph,
+    write_context_bundle,
     write_scope_hints,
     write_search_hits,
 )
@@ -159,8 +162,17 @@ def run(
             settings,
             logger=logger,
         )
+        code_graph, context_bundle = build_context_bundle(
+            repo_path,
+            issue_ctx,
+            scope_bundle,
+            search_hits,
+            settings,
+        )
         write_scope_hints(ctx, scope_bundle)
         write_search_hits(ctx, scope_bundle, search_hits)
+        write_code_graph(ctx, code_graph)
+        write_context_bundle(ctx, context_bundle)
         logger.info(
             "Scope hints: %s",
             scope_bundle.scope_hints[:10],
@@ -169,6 +181,12 @@ def run(
             "Scope search: %d hits, %d files",
             len(search_hits),
             len(scope_bundle.files),
+        )
+        logger.info(
+            "Context bundle: %d files, %d/%d chars",
+            len(context_bundle.files),
+            context_bundle.total_chars,
+            context_bundle.budget_chars,
         )
         branch = create_issue_branch(repo_path, issue, issue_ctx.title, logger)
         write_branch_meta(ctx, branch)
