@@ -161,10 +161,9 @@ def _order_file_patches(file_patches: list[FilePatch], plan: FixPlan) -> list[Fi
         if key in buckets:
             ordered.extend(buckets[key])
             seen.add(key)
-    for item in file_patches:
-        key = normalize_file_path(item.path)
+    for key, items in buckets.items():
         if key not in seen:
-            ordered.append(item)
+            ordered.extend(items)
             seen.add(key)
     return ordered
 
