@@ -108,6 +108,16 @@ def test_list_top_level_packages(tmp_path):
     assert packages == ["internal", "pkg"]
 
 
+def test_list_top_level_packages_ignores_symlinked_go(tmp_path):
+    repo = _make_fixture_repo(tmp_path)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "remote.go").write_text("package outside\n", encoding="utf-8")
+    (repo / "fake_pkg").symlink_to(outside, target_is_directory=True)
+    packages = list_top_level_packages(repo, skip_vendor=True)
+    assert packages == ["internal", "pkg"]
+
+
 def test_build_repo_map(tmp_path):
     repo = _make_fixture_repo(tmp_path)
     settings = Settings(repo_map_max_depth=3, repo_map_skip_vendor=True)

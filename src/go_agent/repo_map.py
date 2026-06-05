@@ -66,9 +66,20 @@ def _should_skip_dir(name: str, *, skip_vendor: bool) -> bool:
 
 
 def _dir_has_go_files(path: Path) -> bool:
-    for child in path.rglob("*.go"):
-        if child.is_file():
-            return True
+    stack = [path]
+    while stack:
+        directory = stack.pop()
+        try:
+            with os.scandir(directory) as entries:
+                for entry in entries:
+                    if entry.is_symlink():
+                        continue
+                    if entry.is_file(follow_symlinks=False) and entry.name.endswith(".go"):
+                        return True
+                    if entry.is_dir(follow_symlinks=False):
+                        stack.append(Path(entry.path))
+        except OSError:
+            continue
     return False
 
 
