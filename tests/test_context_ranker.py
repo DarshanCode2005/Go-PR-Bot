@@ -55,6 +55,26 @@ def test_test_file_included_when_source_ranked(tmp_path):
     assert "pkg/foo_test.go" in paths
 
 
+def test_missing_test_pair_does_not_consume_slot(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "go.mod").write_text("module example.com/foo\n\ngo 1.22\n", encoding="utf-8")
+    pkg = repo / "pkg"
+    pkg.mkdir()
+    (pkg / "foo.go").write_text("package pkg\n", encoding="utf-8")
+    (pkg / "bar.go").write_text("package pkg\n", encoding="utf-8")
+    (pkg / "baz.go").write_text("package pkg\n", encoding="utf-8")
+    hits = [
+        SearchHit(path="pkg/foo.go", line_number=1, line_text="x", query="foo"),
+    ]
+    graph = build_code_graph(repo, "owner/repo", [], hits, Settings())
+    ranked = rank_files(graph, hits, Settings(context_max_files=2))
+    paths = [item.path for item in ranked]
+    assert "pkg/foo_test.go" not in paths
+    assert len(paths) == 2
+    assert "pkg/foo.go" in paths
+
+
 def test_max_files_cap(tmp_path):
     repo = _make_rank_repo(tmp_path)
     hits = [

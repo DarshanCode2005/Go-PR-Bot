@@ -95,6 +95,7 @@ def rank_files(
         key=lambda item: (-item.score, item.graph_distance, item.path),
     )
 
+    graph_paths = {node.label for node in graph.nodes}
     selected: list[RankedFile] = []
     selected_paths: set[str] = set()
     for item in ranked:
@@ -104,7 +105,11 @@ def rank_files(
         selected_paths.add(item.path)
         if item.path.endswith(".go") and not item.path.endswith("_test.go"):
             test_path = _test_pair_path(item.path)
-            if test_path and test_path not in selected_paths:
+            if (
+                test_path
+                and test_path in graph_paths
+                and test_path not in selected_paths
+            ):
                 selected.append(
                     RankedFile(
                         path=test_path,
