@@ -162,8 +162,6 @@ def run(
             settings,
             logger=logger,
         )
-        write_scope_hints(ctx, scope_bundle)
-        write_search_hits(ctx, scope_bundle, search_hits)
         code_graph, context_bundle = build_context_bundle(
             repo_path,
             issue_ctx,
@@ -171,6 +169,8 @@ def run(
             search_hits,
             settings,
         )
+        write_scope_hints(ctx, scope_bundle)
+        write_search_hits(ctx, scope_bundle, search_hits)
         write_code_graph(ctx, code_graph)
         write_context_bundle(ctx, context_bundle)
         logger.info(
