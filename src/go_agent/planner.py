@@ -12,6 +12,7 @@ from go_agent.context_builder import ContextBundle
 from go_agent.github_issues import IssueContext
 from go_agent.llm_client import complete, llm_available
 from go_agent.run_context import RunContext
+from go_agent.utils import normalize_file_path
 from go_agent.workspace import repo_slug
 
 PLANNER_SYSTEM_PROMPT = """You are a senior Go open-source maintainer planning a minimal fix for a GitHub issue.
@@ -34,15 +35,6 @@ _SKILLS_ROOT = Path(__file__).resolve().parents[2] / "skills"
 
 class PlanError(RuntimeError):
     """Raised when fix plan cannot be built or validated."""
-
-
-def _normalize_plan_path(path: str) -> str:
-    normalized = path.strip().replace("\\", "/")
-    while normalized.startswith("/"):
-        normalized = normalized[1:]
-    while normalized.startswith("./"):
-        normalized = normalized[2:]
-    return normalized
 
 
 def _detect_dependency_cycle(files: list[str], dependencies: dict[str, list[str]]) -> None:
@@ -115,17 +107,17 @@ class FixPlan(BaseModel):
 
     @model_validator(mode="after")
     def validate_file_dependencies(self) -> FixPlan:
-        canonical = {_normalize_plan_path(path): path for path in self.files}
+        canonical = {normalize_file_path(path): path for path in self.files}
         normalized_deps: dict[str, list[str]] = {}
 
         for raw_key, raw_values in self.file_dependencies.items():
-            key = _normalize_plan_path(raw_key)
+            key = normalize_file_path(raw_key)
             if key not in canonical:
                 msg = f"file_dependencies key {raw_key!r} is not listed in files"
                 raise ValueError(msg)
             deps: list[str] = []
             for raw_dep in raw_values:
-                dep = _normalize_plan_path(raw_dep)
+                dep = normalize_file_path(raw_dep)
                 if dep not in canonical:
                     msg = f"file_dependencies for {raw_key!r} references unknown file {raw_dep!r}"
                     raise ValueError(msg)
@@ -137,15 +129,15 @@ class FixPlan(BaseModel):
                     deps.append(canonical_dep)
             normalized_deps[canonical[key]] = deps
 
-        ordered_files = [canonical[_normalize_plan_path(path)] for path in self.files]
+        ordered_files = [canonical[normalize_file_path(path)] for path in self.files]
         dep_lookup = {
-            _normalize_plan_path(path): [
-                _normalize_plan_path(item) for item in normalized_deps.get(path, [])
+            normalize_file_path(path): [
+                normalize_file_path(item) for item in normalized_deps.get(path, [])
             ]
             for path in ordered_files
         }
         _detect_dependency_cycle(
-            [_normalize_plan_path(path) for path in ordered_files],
+            [normalize_file_path(path) for path in ordered_files],
             dep_lookup,
         )
         object.__setattr__(self, "file_dependencies", normalized_deps)

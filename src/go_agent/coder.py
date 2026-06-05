@@ -17,6 +17,7 @@ from go_agent.context_builder import ContextBundle, ContextFileEntry
 from go_agent.github_issues import IssueContext
 from go_agent.llm_client import complete, llm_available
 from go_agent.planner import FixPlan
+from go_agent.utils import normalize_file_path
 from go_agent.run_context import RunContext
 
 _DIFF_GIT = re.compile(r"^diff --git a/(.+?) b/", re.MULTILINE)
@@ -63,36 +64,27 @@ class CoderArtifact(BaseModel):
     execution_waves: list[list[str]] = Field(default_factory=list)
 
 
-def _normalize_path(path: str) -> str:
-    normalized = path.strip().replace("\\", "/")
-    while normalized.startswith("/"):
-        normalized = normalized[1:]
-    while normalized.startswith("./"):
-        normalized = normalized[2:]
-    return normalized
-
-
 def _canonical_path_map(plan: FixPlan) -> dict[str, str]:
-    return {_normalize_path(path): path for path in plan.files}
+    return {normalize_file_path(path): path for path in plan.files}
 
 
 def _direct_dependencies(plan: FixPlan, file_path: str) -> list[str]:
-    normalized = _normalize_path(file_path)
+    normalized = normalize_file_path(file_path)
     for key, deps in plan.file_dependencies.items():
-        if _normalize_path(key) == normalized:
+        if normalize_file_path(key) == normalized:
             return list(deps)
     return []
 
 
 def _dependency_closure(plan: FixPlan, file_path: str) -> list[str]:
     canonical = _canonical_path_map(plan)
-    normalized = _normalize_path(file_path)
+    normalized = normalize_file_path(file_path)
     ordered: list[str] = []
     seen: set[str] = set()
 
     def visit(node: str) -> None:
         for dep in _direct_dependencies(plan, canonical.get(node, node)):
-            dep_norm = _normalize_path(dep)
+            dep_norm = normalize_file_path(dep)
             if dep_norm in seen:
                 continue
             visit(dep_norm)
@@ -110,14 +102,14 @@ def schedule_coder_waves(plan: FixPlan) -> list[list[str]]:
         return []
 
     canonical = _canonical_path_map(plan)
-    normalized_files = [_normalize_path(path) for path in plan.files]
+    normalized_files = [normalize_file_path(path) for path in plan.files]
     indegree = {path: 0 for path in normalized_files}
     dependents: dict[str, list[str]] = {path: [] for path in normalized_files}
 
     for path in plan.files:
-        node = _normalize_path(path)
+        node = normalize_file_path(path)
         for dep in _direct_dependencies(plan, path):
-            dep_norm = _normalize_path(dep)
+            dep_norm = normalize_file_path(dep)
             if dep_norm not in indegree:
                 msg = f"file_dependencies for {path!r} references unknown file {dep!r}"
                 raise CoderError(msg)
@@ -228,22 +220,22 @@ def _dependency_context_for_file(
 
 
 def assert_file_in_plan(path: str, plan: FixPlan) -> None:
-    normalized = _normalize_path(path)
-    allowed = {_normalize_path(item) for item in plan.files}
+    normalized = normalize_file_path(path)
+    allowed = {normalize_file_path(item) for item in plan.files}
     if normalized not in allowed:
         msg = f"file {path!r} is not listed in plan.files"
         raise CoderError(msg)
 
 
 def extract_paths_from_unified_diff(patch: str) -> set[str]:
-    paths = {_normalize_path(match) for match in _DIFF_GIT.findall(patch)}
+    paths = {normalize_file_path(match) for match in _DIFF_GIT.findall(patch)}
     if paths:
         return paths
     for line in patch.splitlines():
         if line.startswith("--- a/"):
-            paths.add(_normalize_path(line.removeprefix("--- a/")))
+            paths.add(normalize_file_path(line.removeprefix("--- a/")))
         elif line.startswith("+++ b/"):
-            paths.add(_normalize_path(line.removeprefix("+++ b/")))
+            paths.add(normalize_file_path(line.removeprefix("+++ b/")))
     return {path for path in paths if path and path != "/dev/null"}
 
 
@@ -254,7 +246,7 @@ def validate_patch_scope(patch: str, allowed: set[str]) -> None:
     if not touched:
         msg = "patch does not contain recognizable file paths"
         raise CoderError(msg)
-    normalized_allowed = {_normalize_path(path) for path in allowed}
+    normalized_allowed = {normalize_file_path(path) for path in allowed}
     for path in touched:
         if path not in normalized_allowed:
             msg = f"patch modifies out-of-plan file: {path}"
@@ -364,7 +356,7 @@ def normalize_llm_patch(
 def plan_slice_for_file(plan: FixPlan, file_path: str) -> PlanSlice:
     assert_file_in_plan(file_path, plan)
     return PlanSlice(
-        file_path=_normalize_path(file_path),
+        file_path=normalize_file_path(file_path),
         steps=list(plan.steps),
         test_commands=list(plan.test_commands),
         acceptance_criteria=list(plan.acceptance_criteria),
@@ -375,9 +367,9 @@ def _bundle_entry_for_file(
     context_bundle: ContextBundle,
     file_path: str,
 ) -> ContextFileEntry | None:
-    normalized = _normalize_path(file_path)
+    normalized = normalize_file_path(file_path)
     for entry in context_bundle.files:
-        if _normalize_path(entry.path) == normalized:
+        if normalize_file_path(entry.path) == normalized:
             return entry
     return None
 
@@ -446,7 +438,7 @@ def generate_file_patch(
     if not llm_available(settings):
         raise CoderError("LLM API key required for coder")
 
-    normalized_path = _normalize_path(file_path)
+    normalized_path = normalize_file_path(file_path)
     original = (
         file_content
         if file_content is not None
