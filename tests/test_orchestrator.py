@@ -13,7 +13,12 @@ from go_agent.orchestrator import (
     VALIDATION_NODE_NAMES,
     compile_graph,
 )
-from go_agent.orchestrator.graph import route_after_lint, route_after_test, route_after_test_validation
+from go_agent.orchestrator.graph import (
+    route_after_lint,
+    route_after_review,
+    route_after_test,
+    route_after_test_validation,
+)
 from go_agent.orchestrator.state import AgentState
 from go_agent.patches import PatchResult
 from go_agent.planner import FixPlan
@@ -87,13 +92,14 @@ def test_full_graph_edges():
     assert ("code", "integrate") in linear
     assert ("integrate", "test") in linear
     assert ("fix", "code") in linear
-    assert ("review", "pr") in linear
     assert ("pr", "__end__") in linear
     assert ("test", "fix") in conditional
     assert ("test", "lint") in conditional
     assert ("test", "review") in conditional
     assert ("lint", "fix") in conditional
     assert ("lint", "review") in conditional
+    assert ("review", "fix") in conditional
+    assert ("review", "pr") in conditional
 
 
 def _base_sha(repo_path: Path) -> str:
@@ -295,6 +301,26 @@ def test_route_after_test_pass():
     assert route_after_test(state, max_fix_iterations=5) == "lint"
 
 
+def test_route_after_review_approve():
+    state = {"review": {"decision": "approve"}, "review_round": 0}
+    assert route_after_review(state, max_review_rounds=1) == "pr"
+
+
+def test_route_after_review_request_changes_retry():
+    state = {"review": {"decision": "request_changes"}, "review_round": 0}
+    assert route_after_review(state, max_review_rounds=1) == "fix"
+
+
+def test_route_after_review_request_changes_exhausted():
+    state = {"review": {"decision": "request_changes"}, "review_round": 1}
+    assert route_after_review(state, max_review_rounds=1) == "pr"
+
+
+def test_route_after_review_reject():
+    state = {"review": {"decision": "reject"}, "review_round": 0}
+    assert route_after_review(state, max_review_rounds=1) == "pr"
+
+
 def _failing_test_node(state: AgentState) -> AgentState:
     return {
         "status": "testing",
@@ -308,6 +334,8 @@ def _stub_plan_node(state: AgentState) -> AgentState:
         "status": "planning",
         "last_node": "plan",
         "fix_plan": {
+            "issue_number": 1,
+            "repo": "gin-gonic/gin",
             "files": ["README.md"],
             "steps": ["stub"],
             "test_commands": ["go test ./..."],
@@ -326,11 +354,148 @@ def _stub_integrate_node(state: AgentState) -> AgentState:
 
 def _stub_fix_node(state: AgentState) -> AgentState:
     iteration = state.get("iteration", 0) + 1
-    return {
+    review = state.get("review") or {}
+    result: AgentState = {
         "status": "fixing",
         "last_node": "fix",
         "iteration": iteration,
     }
+    if review.get("decision") == "request_changes":
+        result["review_round"] = state.get("review_round", 0) + 1
+    return result
+
+
+def _passing_test_node(state: AgentState) -> AgentState:
+    return {
+        "status": "testing",
+        "last_node": "test",
+        "test_result": {"passed": True, "output": "ok", "command": "go test ./..."},
+    }
+
+
+def _passing_lint_node(state: AgentState) -> AgentState:
+    return {
+        "status": "linting",
+        "last_node": "lint",
+        "lint_result": {"passed": True, "output": "ok", "findings": []},
+    }
+
+
+def _closed_loop_initial_state(*, run_id: str = "review-loop") -> AgentState:
+    return {
+        "run_id": run_id,
+        "repo": "gin-gonic/gin",
+        "issue_number": 1,
+        "artifact_dir": f"/tmp/{run_id}",
+        "repo_path": "/tmp/repo",
+        "scope_hints": [],
+        "issue_context": {
+            "repo": "gin-gonic/gin",
+            "number": 1,
+            "title": "Update readme",
+            "state": "open",
+        },
+        "context_bundle": {
+            "repo": "gin-gonic/gin",
+            "issue_number": 1,
+            "files": [],
+            "total_chars": 0,
+            "budget_chars": 12000,
+        },
+        "branch_meta": {"base_sha": "abc", "branch_name": "agent/issue-1"},
+        "iteration": 0,
+        "review_round": 0,
+    }
+
+
+def test_review_fix_loop_retries_then_approves(tmp_path, monkeypatch):
+    from go_agent.reviewer import ReviewChecklist, ReviewResult
+
+    artifact_dir = tmp_path / "artifacts" / "review-loop"
+    artifact_dir.mkdir(parents=True)
+    request_review = ReviewResult(
+        decision="request_changes",
+        comments=["Improve error message in foo.go"],
+        checklist=ReviewChecklist(style=False),
+    )
+    approve_review = ReviewResult(
+        decision="approve",
+        comments=["Looks good"],
+        checklist=ReviewChecklist(
+            acceptance_criteria=True,
+            tests=True,
+            api_breaks=True,
+            style=True,
+            error_messages=True,
+        ),
+    )
+    calls = {"count": 0}
+
+    def mock_build_review(*args, **kwargs):
+        calls["count"] += 1
+        return request_review if calls["count"] == 1 else approve_review
+
+    monkeypatch.setattr("go_agent.orchestrator.nodes.build_review", mock_build_review)
+    with patch.dict(
+        "go_agent.orchestrator.graph._NODE_FUNCS",
+        {
+            "plan": _stub_plan_node,
+            "code": _stub_code_node,
+            "integrate": _stub_integrate_node,
+            "test": _passing_test_node,
+            "lint": _passing_lint_node,
+            "fix": _stub_fix_node,
+        },
+    ):
+        result = compile_graph(include_closed_loop=True, max_review_rounds=1).invoke(
+            {**_closed_loop_initial_state(), "artifact_dir": str(artifact_dir)}
+        )
+
+    assert result["status"] == "done"
+    assert result["last_node"] == "pr"
+    assert result["review"]["decision"] == "approve"
+    assert calls["count"] == 2
+    assert result.get("review_round") == 1
+
+
+def test_review_fix_loop_escalates_on_second_request_changes(tmp_path, monkeypatch):
+    from go_agent.reviewer import ReviewChecklist, ReviewResult
+
+    artifact_dir = tmp_path / "artifacts" / "review-fail"
+    artifact_dir.mkdir(parents=True)
+    request_review = ReviewResult(
+        decision="request_changes",
+        comments=["Fix foo.go formatting"],
+        checklist=ReviewChecklist(style=False),
+    )
+    calls = {"count": 0}
+
+    def mock_build_review(*args, **kwargs):
+        calls["count"] += 1
+        return request_review
+
+    monkeypatch.setattr("go_agent.orchestrator.nodes.build_review", mock_build_review)
+    with patch.dict(
+        "go_agent.orchestrator.graph._NODE_FUNCS",
+        {
+            "plan": _stub_plan_node,
+            "code": _stub_code_node,
+            "integrate": _stub_integrate_node,
+            "test": _passing_test_node,
+            "lint": _passing_lint_node,
+            "fix": _stub_fix_node,
+        },
+    ):
+        compiled = compile_graph(include_closed_loop=True, max_review_rounds=1)
+        result = compiled.invoke(
+            {**_closed_loop_initial_state(run_id="review-fail"), "artifact_dir": str(artifact_dir)}
+        )
+
+    assert result["status"] == "failed"
+    assert result["last_node"] == "pr"
+    assert result["review"]["decision"] == "request_changes"
+    assert calls["count"] == 2
+    assert (artifact_dir / "review.json").exists()
 
 
 def test_full_invoke_fix_loop_visits_fix_and_code():
@@ -476,6 +641,7 @@ def test_architecture_lists_graph_nodes():
         "code --> integrate",
         "integrate --> test",
         "fix --> code",
-        "review --> pr",
+        'review -->|"request_changes',
+        "review -->|approve or exhausted| pr",
     ):
         assert edge in section, f"LangGraph mermaid must include edge {edge!r}"

@@ -15,6 +15,7 @@ from go_agent.orchestrator.graph import (
     build_graph,
     compile_graph,
     route_after_lint,
+    route_after_review,
     route_after_test,
     route_after_test_validation,
 )
@@ -38,6 +39,7 @@ __all__ = [
     "graph_invoke_config",
     "is_run_complete",
     "route_after_lint",
+    "route_after_review",
     "route_after_test",
     "route_after_test_validation",
 ]

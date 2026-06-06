@@ -280,6 +280,92 @@ def test_review_node_writes_review_json_on_approve(tmp_path, monkeypatch):
     assert (artifact_dir / "review.json").exists()
 
 
+def test_review_node_request_changes_allows_retry(tmp_path, monkeypatch):
+    from go_agent.orchestrator.nodes import review_node
+    from go_agent.orchestrator.state import AgentState
+    from go_agent.reviewer import ReviewChecklist
+
+    repo_path = tmp_path / "repo"
+    init_git_repo(repo_path)
+    artifact_dir = tmp_path / "artifacts" / "run-retry"
+    artifact_dir.mkdir(parents=True)
+    monkeypatch.setenv("GO_AGENT_ARTIFACTS_DIR", str(tmp_path / "artifacts"))
+    clear_settings_cache()
+
+    patch_path = artifact_dir / "changes.patch"
+    patch_path.write_text("diff --git a/README.md b/README.md\n", encoding="utf-8")
+
+    review = ReviewResult(
+        decision="request_changes",
+        comments=["foo.go:12 needs formatting fix per gofmt -d"],
+        checklist=ReviewChecklist(style=False),
+    )
+
+    initial_state: AgentState = {
+        "run_id": "run-retry",
+        "repo": "gin-gonic/gin",
+        "issue_number": 1,
+        "artifact_dir": str(artifact_dir),
+        "repo_path": str(repo_path),
+        "iteration": 0,
+        "review_round": 0,
+        "test_result": {"passed": True, "output": "ok"},
+        "lint_result": {"passed": True, "output": "ok", "findings": []},
+        "changes_patch_path": str(patch_path),
+        "issue_context": _issue().model_dump(),
+        "fix_plan": _plan().model_dump(),
+    }
+
+    with patch("go_agent.orchestrator.nodes.build_review", return_value=review):
+        result = review_node(initial_state)
+
+    assert result["status"] == "reviewing"
+    assert result["review"]["decision"] == "request_changes"
+
+
+def test_review_node_request_changes_exhausted_sets_failed(tmp_path, monkeypatch):
+    from go_agent.orchestrator.nodes import review_node
+    from go_agent.orchestrator.state import AgentState
+    from go_agent.reviewer import ReviewChecklist
+
+    repo_path = tmp_path / "repo"
+    init_git_repo(repo_path)
+    artifact_dir = tmp_path / "artifacts" / "run-exhausted"
+    artifact_dir.mkdir(parents=True)
+    monkeypatch.setenv("GO_AGENT_ARTIFACTS_DIR", str(tmp_path / "artifacts"))
+    clear_settings_cache()
+
+    patch_path = artifact_dir / "changes.patch"
+    patch_path.write_text("diff --git a/README.md b/README.md\n", encoding="utf-8")
+
+    review = ReviewResult(
+        decision="request_changes",
+        comments=["Still needs changes in foo.go:12"],
+        checklist=ReviewChecklist(style=False),
+    )
+
+    initial_state: AgentState = {
+        "run_id": "run-exhausted",
+        "repo": "gin-gonic/gin",
+        "issue_number": 1,
+        "artifact_dir": str(artifact_dir),
+        "repo_path": str(repo_path),
+        "iteration": 0,
+        "review_round": 1,
+        "test_result": {"passed": True, "output": "ok"},
+        "lint_result": {"passed": True, "output": "ok", "findings": []},
+        "changes_patch_path": str(patch_path),
+        "issue_context": _issue().model_dump(),
+        "fix_plan": _plan().model_dump(),
+    }
+
+    with patch("go_agent.orchestrator.nodes.build_review", return_value=review):
+        result = review_node(initial_state)
+
+    assert result["status"] == "failed"
+    assert (artifact_dir / "review.json").exists()
+
+
 def test_review_node_reject_sets_failed_status(tmp_path, monkeypatch):
     from go_agent.orchestrator.nodes import review_node
     from go_agent.orchestrator.state import AgentState
@@ -296,9 +382,9 @@ def test_review_node_reject_sets_failed_status(tmp_path, monkeypatch):
     patch_path.write_text("diff --git a/README.md b/README.md\n", encoding="utf-8")
 
     rejected = ReviewResult(
-        decision="request_changes",
-        comments=["foo.go:12 needs formatting fix per gofmt -d"],
-        checklist=ReviewChecklist(style=False),
+        decision="reject",
+        comments=["Change is too risky for this issue"],
+        checklist=ReviewChecklist(api_breaks=False),
     )
 
     initial_state: AgentState = {
@@ -319,5 +405,5 @@ def test_review_node_reject_sets_failed_status(tmp_path, monkeypatch):
         result = review_node(initial_state)
 
     assert result["status"] == "failed"
-    assert result["review"]["decision"] == "request_changes"
+    assert result["review"]["decision"] == "reject"
     assert (artifact_dir / "review.json").exists()

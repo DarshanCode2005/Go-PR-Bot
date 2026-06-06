@@ -152,7 +152,7 @@ Conceptual edges (full system, not all nodes in stub graph yet):
 
 Module: [`src/go_agent/orchestrator/`](../src/go_agent/orchestrator/)
 
-**Wired nodes:** `plan`, `code`, `integrate`, `test`, `lint`, `fix` — plus stub `review`, `pr`. CLI invokes `compile_graph(include_test=True, include_closed_loop=True)` after setup and branch creation.
+**Wired nodes:** `plan`, `code`, `integrate`, `test`, `lint`, `fix`, `review`, `pr`. CLI invokes `compile_graph(include_test=True, include_closed_loop=True)` after setup and branch creation.
 
 **Validation-only graph** (`include_test=True`, `include_closed_loop=False`): test → lint (if pass) → END; used in fast offline tests.
 
@@ -170,7 +170,8 @@ flowchart TB
   lint -->|pass| review
   lint -->|"fail and iteration gte max"| review
   fix --> code
-  review --> pr
+  review -->|"request_changes and review_round lt max"| fix
+  review -->|approve or exhausted| pr
   pr --> endNode["END"]
 ```
 
@@ -199,13 +200,21 @@ Routing from `lint`:
 | failed and `iteration < max_fix_iterations` | `fix` |
 | failed and `iteration >= max_fix_iterations` | `review` (status `failed`) |
 
-`fix` calls the fix agent ([`fixer.py`](../src/go_agent/fixer.py)), increments `iteration`, writes `fix_meta.json`, then returns to `code`. Fix-loop cap uses `GO_AGENT_MAX_FIX_ITERATIONS` (default 5).
+Routing from `review`:
+
+| Condition | Next node |
+|-----------|-----------|
+| `review.decision == approve` | `pr` |
+| `request_changes` and `review_round < max_review_rounds` | `fix` |
+| `reject` or exhausted `request_changes` | `pr` (status `failed`) |
+
+`fix` calls the fix agent ([`fixer.py`](../src/go_agent/fixer.py)), increments `iteration`, writes `fix_meta.json`, then returns to `code`. Fix-loop cap uses `GO_AGENT_MAX_FIX_ITERATIONS` (default 5). Review-driven fixes use review comments as failure context; cap uses `GO_AGENT_MAX_REVIEW_ROUNDS` (default 1).
 
 ### Fix agent
 
 Module: [`src/go_agent/fixer.py`](../src/go_agent/fixer.py)
 
-- Consumes `test_result` / `lint_result` output and lint `file:line` findings
+- Consumes `test_result` / `lint_result` output, lint `file:line` findings, or review `comments[]` when `failure_source=review`
 - Generates corrective patches via fast-tier LLM (reuses coder patch pipeline)
 - Writes `fix_meta.json` with iteration, failure source, and error summary
 
