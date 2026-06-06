@@ -13,7 +13,7 @@ from go_agent.orchestrator import (
     VALIDATION_NODE_NAMES,
     compile_graph,
 )
-from go_agent.orchestrator.graph import route_after_test
+from go_agent.orchestrator.graph import route_after_test, route_after_test_validation
 from go_agent.orchestrator.state import AgentState
 from go_agent.patches import PatchResult
 from go_agent.planner import FixPlan
@@ -48,8 +48,11 @@ def test_validation_graph_edges():
     compiled = compile_graph(include_test=True)
     edges = compiled.get_graph().edges
     linear = {(e.source, e.target) for e in edges if not e.conditional}
+    conditional = {(e.source, e.target) for e in edges if e.conditional}
     assert ("integrate", "test") in linear
-    assert ("test", "__end__") in linear
+    assert ("lint", "__end__") in linear
+    assert ("test", "lint") in conditional
+    assert ("test", "__end__") in conditional
 
 
 def test_implement_graph_has_expected_nodes():
@@ -177,9 +180,86 @@ def test_validation_invoke_happy_path(tmp_path, monkeypatch):
             "iteration": 0,
         }
     )
-    assert result["last_node"] == "test"
+    assert result["last_node"] == "lint"
     assert result.get("test_result", {}).get("passed") is True
+    assert result.get("lint_result", {}).get("passed") is True
     assert (artifact_dir / "test_result.json").exists()
+    assert (artifact_dir / "lint_result.json").exists()
+
+
+def test_route_after_test_validation_pass():
+    state = {"test_result": {"passed": True}}
+    assert route_after_test_validation(state) == "lint"
+
+
+def test_route_after_test_validation_fail():
+    from langgraph.graph import END
+
+    state = {"test_result": {"passed": False}}
+    assert route_after_test_validation(state) == END
+
+
+def test_validation_skips_lint_when_tests_fail(tmp_path, monkeypatch):
+    repo_path = tmp_path / "repo"
+    init_git_repo(repo_path, files={"README.md": "hello\n"})
+    artifact_dir = tmp_path / "artifacts" / "run-fail"
+    artifact_dir.mkdir(parents=True)
+    enable_agent_mocks(monkeypatch)
+
+    def failing_run_tests(*args, **kwargs):
+        from go_agent.test_runner import CommandResult, TestRunResult
+
+        command = "go test ./... -count=1"
+        return TestRunResult(
+            passed=False,
+            commands=[
+                CommandResult(
+                    command=command,
+                    exit_code=1,
+                    passed=False,
+                    stdout="",
+                    stderr="FAIL",
+                    duration_seconds=0.1,
+                )
+            ],
+            resolved_commands=[command],
+            source="plan",
+            plan_commands=[command],
+        )
+
+    monkeypatch.setattr("go_agent.orchestrator.nodes.run_tests", failing_run_tests)
+
+    compiled = compile_graph(include_test=True)
+    result = compiled.invoke(
+        {
+            "run_id": "run-fail",
+            "repo": "gin-gonic/gin",
+            "issue_number": 1,
+            "artifact_dir": str(artifact_dir),
+            "repo_path": str(repo_path),
+            "scope_hints": [],
+            "issue_context": {
+                "repo": "gin-gonic/gin",
+                "number": 1,
+                "title": "Update readme",
+                "state": "open",
+            },
+            "context_bundle": {
+                "repo": "gin-gonic/gin",
+                "issue_number": 1,
+                "files": [],
+                "total_chars": 0,
+                "budget_chars": 12000,
+            },
+            "branch_meta": {"base_sha": _base_sha(repo_path), "branch_name": "agent/issue-1"},
+            "iteration": 0,
+        }
+    )
+    assert result["last_node"] == "test"
+    assert result.get("test_result", {}).get("passed") is False
+    assert "lint_result" not in result
+    assert (artifact_dir / "test_result.json").exists()
+    assert not (artifact_dir / "lint_result.json").exists()
 
 
 def test_route_after_test_fix_loop():

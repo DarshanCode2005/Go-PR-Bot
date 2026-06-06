@@ -12,6 +12,7 @@ AgentStatus = Literal[
     "coding",
     "integrating",
     "testing",
+    "linting",
     "fixing",
     "reviewing",
     "shipping",
@@ -29,6 +30,18 @@ class TestResult(BaseModel):
     command: str = ""
     commands: list[str] = Field(default_factory=list)
     source: str = "plan"
+
+
+class LintResult(BaseModel):
+    """Result of lint/vet subprocesses."""
+
+    passed: bool = False
+    exit_code: int = 0
+    output: str = ""
+    command: str = ""
+    commands: list[str] = Field(default_factory=list)
+    source: str = "default"
+    findings: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class ReviewResult(BaseModel):
@@ -55,6 +68,7 @@ class AgentState(TypedDict, total=False):
     iteration: int
     last_node: str
     test_result: dict[str, Any]
+    lint_result: dict[str, Any]
     review: dict[str, Any]
     patch_applied: bool
     changes_patch_path: str

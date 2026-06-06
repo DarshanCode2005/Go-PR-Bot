@@ -30,12 +30,13 @@ Step-by-step record of what was built for each backlog item in [Go-PR-Bot](https
 | #20 LangGraph skeleton | [#21](https://github.com/DarshanCode2005/Go-PR-Bot/issues/21) | Done |
 | #21 Wire Epic 4 nodes | [#22](https://github.com/DarshanCode2005/Go-PR-Bot/issues/22) | Done |
 | #22 Subprocess test runner | [#23](https://github.com/DarshanCode2005/Go-PR-Bot/issues/23) | Done |
+| #23 Subprocess lint runner | [#24](https://github.com/DarshanCode2005/Go-PR-Bot/issues/24) | Done |
 
 ---
 
 ## Current pipeline state
 
-`go-agent run` performs CLI setup (clone through context bundle and branch), then invokes the LangGraph **validation graph** (`plan → code → integrate → test → END`). Patches are applied locally; `test_result.json` is written; dry-run exits **0** on pass or **1** on test failure. Fix/review/pr nodes remain stubbed for later issues.
+`go-agent run` performs CLI setup (clone through context bundle and branch), then invokes the LangGraph **validation graph** (`plan → code → integrate → test → lint → END` when tests pass; `test → END` when tests fail). Patches are applied locally; `test_result.json` and `lint_result.json` are written; dry-run exits **0** on pass or **1** on test/lint failure. Fix/review/pr nodes remain stubbed for later issues.
 
 ```
 go-agent run --repo <owner/name> --issue <N>
@@ -58,15 +59,16 @@ go-agent run --repo <owner/name> --issue <N>
   │     code_node → build_proposed_patch + proposed.patch + coder_meta.json
   │     integrate_node → integrate + apply_patch_and_commit → changes.patch
   │     test_node → run_tests + test_result.json
+  │     lint_node → run_lints + lint_result.json (only when tests pass)
   ├─ build_pr_draft() + write_pr_md()    → PR.md
   ├─ [optional] maybe_create_pr()        → --no-dry-run --create-pr only
   │     push branch + gh pr create --draft → pr_meta.json, exit 0
-  └─ dry-run exit 0 (exit 1 if tests fail)
+  └─ dry-run exit 0 (exit 1 if tests or lint fail)
 ```
 
 **Approved repos:** `gin-gonic/gin`, `spf13/cobra`, `go-playground/validator`, `golangci/golangci-lint`
 
-**Test suite:** 176 tests, `pytest -q && ruff check src tests`
+**Test suite:** 191 tests, `pytest -q && ruff check src tests`
 
 ---
 
@@ -90,6 +92,7 @@ All artifacts live under `artifacts/{run_id}/`:
 | `coder_meta.json` | Backlog #17 | Per-file patch metadata, `execution_waves`, combined diff |
 | `integrator_meta.json` | Backlog #19 | Conflict resolutions, `files_touched`, resolved patch |
 | `test_result.json` | Backlog #22 | Subprocess test commands, exit codes, stdout/stderr |
+| `lint_result.json` | Backlog #23 | Subprocess lint commands, exit codes, stdout/stderr, file:line findings |
 | `resolved.patch` | Backlog #19 | Unified diff after sequential apply / merge |
 | `branch_meta.json` | Backlog #5 | branch name, base SHA, default branch, issue info |
 | `changes.patch` | Backlog #6 | `git diff` from base SHA (after patch apply) |
@@ -122,9 +125,10 @@ Shared cache: `workspaces/_cache/{owner__repo}/` (shallow clone + `meta.json` + 
 | `planner.py` | Strong-tier planner; Pydantic `FixPlan`; writes `plan.json` |
 | `coder.py` | Fast-tier per-file coder; SEARCH/REPLACE → unified diff; scope guard |
 | `integrator.py` | Sequential patch apply; LLM merge on overlapping hunks |
-| `skills.py` | Skill loading; repo-specific test command override parsing |
+| `skills.py` | Skill loading; repo-specific test/lint command override parsing |
 | `test_runner.py` | Subprocess test command runner; writes `test_result.json` |
-| `orchestrator/` | LangGraph graph; wired plan/code/integrate/test nodes + stub fix/review/pr |
+| `lint_runner.py` | Subprocess lint/vet runner; writes `lint_result.json` with file:line findings |
+| `orchestrator/` | LangGraph graph; wired plan/code/integrate/test/lint nodes + stub fix/review/pr |
 | `orchestrator/runtime.py` | Reconstruct RunContext and Pydantic models from AgentState |
 | `context_builder.py` | Code graph, ranked context bundle, scope enrichment |
 | `pr_writer.py` | PR draft template + optional LLM; writes `PR.md` |
@@ -1345,12 +1349,81 @@ pytest -q && ruff check src tests
 #### Out of scope
 
 - Fix loop on test failure (Backlog #24)
-- Lint/vet runner (Backlog #23 / GitHub #24)
 
 #### Verification
 
 ```bash
 pytest tests/test_test_runner.py tests/test_orchestrator.py tests/test_cli.py -q
+pytest -q && ruff check src tests
+```
+
+---
+
+### Backlog #23 — Subprocess lint/vet runner
+
+**GitHub:** [#24](https://github.com/DarshanCode2005/Go-PR-Bot/issues/24)  
+**Commit:** (pending) `feat(lint): subprocess vet/lint runner with skill overrides (fixes #24)`  
+**PR:** (pending)
+
+#### What was built
+
+**`skills.py`**
+
+- `parse_skill_lint_commands()`, `resolve_lint_commands()`, `default_lint_commands()`
+- Shared `_parse_frontmatter_list_commands()` for test/lint YAML lists
+- Default: `go vet ./...`; append `golangci-lint run` when binary on PATH and `.golangci.yml` exists
+- Repo skill `lint_commands:` frontmatter replaces defaults
+
+**`lint_runner.py`**
+
+- `run_lint_commands()`, `run_lints()`, `write_lint_result()` → `lint_result.json`
+- `LintFinding` / `LintRunResult`; `parse_lint_findings()` extracts `file:line` from vet/golangci output
+- `LintRunError` on timeout; reuses `CommandResult` from `test_runner`
+
+**`orchestrator/nodes.py`**
+
+- `lint_node` wired to `run_lints` + artifact export
+
+**`orchestrator/graph.py`**
+
+- `VALIDATION_NODE_NAMES` includes `lint`
+- Conditional routing: test pass → lint → END; test fail → END (lint skipped)
+
+**`orchestrator/state.py`**
+
+- `LintResult` model; `linting` status; `lint_result` channel
+
+**`config.py`**
+
+- `lint_timeout` (default 120, `GO_AGENT_LINT_TIMEOUT`)
+
+**`cli.py`**
+
+- Catches `LintRunError`; exit 1 on lint failure after PR draft
+- Logs sample `file:line` findings when available
+
+#### Key decisions
+
+- Lint runs only when tests pass (validation graph skips lint on test failure)
+- Skill override applies only from repo-specific skill (not `_default`)
+- Findings deduped by `(file, line, column, message)`; full stderr preserved in artifact
+
+#### Tests
+
+- `tests/test_lint_runner.py` — resolution, finding parse, subprocess mock, timeout, artifact
+- Updated orchestrator tests for conditional lint routing and `lint_result.json`
+- `enable_agent_mocks()` patches `run_lints` for offline CLI tests
+
+#### Out of scope
+
+- Fix loop on lint failure (Backlog #24)
+- Closed-loop `lint → fix` routing
+- `gofmt -l` enforcement
+
+#### Verification
+
+```bash
+pytest tests/test_lint_runner.py tests/test_orchestrator.py tests/test_cli.py -q
 pytest -q && ruff check src tests
 ```
 
@@ -1434,7 +1507,9 @@ See `.env.example` and `config.py`. Minimum for current pipeline:
 | `GO_AGENT_RAG_EMBED_PROVIDER` | Optional | `local` or `openai` (default local) |
 | `GO_AGENT_LLM_MAX_RETRIES` | Optional | Rate-limit retry attempts for LLM completion |
 | `GO_AGENT_LLM_RETRY_BASE_DELAY` | Optional | Base delay seconds for LLM retry backoff |
+| `GO_AGENT_TEST_TIMEOUT` | Optional | Subprocess test command timeout seconds (default 300) |
+| `GO_AGENT_LINT_TIMEOUT` | Optional | Subprocess lint command timeout seconds (default 120) |
 
 ---
 
-*Last updated: after Backlog #19 (GitHub #20) — integrator conflict merge pass.*
+*Last updated: after Backlog #23 (GitHub #24) — subprocess lint/vet runner.*

@@ -9,7 +9,7 @@ from go_agent.orchestrator import nodes
 from go_agent.orchestrator.state import AgentState
 
 IMPLEMENT_NODE_NAMES: tuple[str, ...] = ("plan", "code", "integrate")
-VALIDATION_NODE_NAMES: tuple[str, ...] = (*IMPLEMENT_NODE_NAMES, "test")
+VALIDATION_NODE_NAMES: tuple[str, ...] = (*IMPLEMENT_NODE_NAMES, "test", "lint")
 GRAPH_NODE_NAMES: tuple[str, ...] = (*VALIDATION_NODE_NAMES, "fix", "review", "pr")
 
 _NODE_FUNCS = {
@@ -17,10 +17,18 @@ _NODE_FUNCS = {
     "code": nodes.code_node,
     "integrate": nodes.integrate_node,
     "test": nodes.test_node,
+    "lint": nodes.lint_node,
     "fix": nodes.fix_node,
     "review": nodes.review_node,
     "pr": nodes.pr_node,
 }
+
+
+def route_after_test_validation(state: AgentState) -> str:
+    """Route from test to lint when tests passed, otherwise end validation."""
+    if (state.get("test_result") or {}).get("passed"):
+        return "lint"
+    return END
 
 
 def route_after_test(state: AgentState, max_fix_iterations: int) -> str:
@@ -101,7 +109,12 @@ def build_graph(
         _add_closed_loop_tail(graph, max_fix_iterations=cap)
     elif test_enabled:
         graph.add_edge("integrate", "test")
-        graph.add_edge("test", END)
+        graph.add_conditional_edges(
+            "test",
+            route_after_test_validation,
+            {"lint": "lint", END: END},
+        )
+        graph.add_edge("lint", END)
     else:
         graph.add_edge("integrate", END)
 

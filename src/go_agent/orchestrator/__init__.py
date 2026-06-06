@@ -7,17 +7,20 @@ from go_agent.orchestrator.graph import (
     build_graph,
     compile_graph,
     route_after_test,
+    route_after_test_validation,
 )
-from go_agent.orchestrator.state import AgentState, ReviewResult, TestResult
+from go_agent.orchestrator.state import AgentState, LintResult, ReviewResult, TestResult
 
 __all__ = [
     "GRAPH_NODE_NAMES",
     "IMPLEMENT_NODE_NAMES",
     "VALIDATION_NODE_NAMES",
     "AgentState",
+    "LintResult",
     "ReviewResult",
     "TestResult",
     "build_graph",
     "compile_graph",
     "route_after_test",
+    "route_after_test_validation",
 ]
