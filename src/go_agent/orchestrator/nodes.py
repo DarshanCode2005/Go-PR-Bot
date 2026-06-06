@@ -20,16 +20,13 @@ def code_node(state: AgentState) -> AgentState:
 
 
 def test_node(state: AgentState) -> AgentState:
-    if "test_result" not in state:
-        result = TestResult(passed=True, output="stub: tests passed", command="stub")
-        return {
-            "status": "testing",
-            "last_node": "test",
-            "test_result": result.model_dump(),
-        }
+    # Stub always marks tests passed. Overwrite test_result on every call so a
+    # prior failure does not stick after a successful fix.
+    result = TestResult(passed=True, output="stub: tests passed", command="stub")
     return {
         "status": "testing",
         "last_node": "test",
+        "test_result": result.model_dump(),
     }
 
 

@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from pathlib import Path
+from unittest.mock import patch
 
 from go_agent.orchestrator import GRAPH_NODE_NAMES, compile_graph
 from go_agent.orchestrator.graph import route_after_test
+from go_agent.orchestrator.state import AgentState
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _ARCHITECTURE = _REPO_ROOT / "docs" / "ARCHITECTURE.md"
@@ -61,29 +63,35 @@ def test_route_after_test_pass():
     assert route_after_test(state, max_fix_iterations=5) == "review"
 
 
-def test_invoke_fix_loop_visits_fix_and_code():
-    compiled = compile_graph(max_fix_iterations=1)
-    visited: list[str] = []
-    initial = {
-        "run_id": "fix-loop",
-        "iteration": 0,
+def _failing_test_node(state: AgentState) -> AgentState:
+    return {
+        "status": "testing",
+        "last_node": "test",
         "test_result": {"passed": False, "output": "fail", "command": "go test ./..."},
     }
-    for step in compiled.stream(initial, stream_mode="updates"):
-        visited.extend(step.keys())
+
+
+def test_invoke_fix_loop_visits_fix_and_code():
+    with patch.dict(
+        "go_agent.orchestrator.graph._NODE_FUNCS",
+        {"test": _failing_test_node},
+    ):
+        compiled = compile_graph(max_fix_iterations=1)
+        visited: list[str] = []
+        initial = {"run_id": "fix-loop", "iteration": 0}
+        for step in compiled.stream(initial, stream_mode="updates"):
+            visited.extend(step.keys())
     assert "fix" in visited
     assert visited.count("code") >= 2
 
 
 def test_invoke_max_iterations_marks_failed():
-    compiled = compile_graph(max_fix_iterations=1)
-    result = compiled.invoke(
-        {
-            "run_id": "max-iter",
-            "iteration": 0,
-            "test_result": {"passed": False, "output": "fail", "command": "go test"},
-        }
-    )
+    with patch.dict(
+        "go_agent.orchestrator.graph._NODE_FUNCS",
+        {"test": _failing_test_node},
+    ):
+        compiled = compile_graph(max_fix_iterations=1)
+        result = compiled.invoke({"run_id": "max-iter", "iteration": 0})
     assert result["status"] == "failed"
     assert result["last_node"] == "pr"
     assert result["iteration"] == 1
