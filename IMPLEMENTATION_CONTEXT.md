@@ -33,6 +33,8 @@ Step-by-step record of what was built for each backlog item in [Go-PR-Bot](https
 | #23 Subprocess lint runner | [#24](https://github.com/DarshanCode2005/Go-PR-Bot/issues/24) | Done |
 | #24 Fix agent closed loop | [#25](https://github.com/DarshanCode2005/Go-PR-Bot/issues/25) | Done |
 | #25 LangGraph checkpointer | [#26](https://github.com/DarshanCode2005/Go-PR-Bot/issues/26) | Done |
+| #26 Review agent | [#27](https://github.com/DarshanCode2005/Go-PR-Bot/issues/27) | Done |
+| #27 Review format/lint context | [#28](https://github.com/DarshanCode2005/Go-PR-Bot/issues/28) | Done |
 
 ---
 
@@ -64,7 +66,7 @@ go-agent run --repo <owner/name> --issue <N>
   │     test_node → run_tests + test_result.json
   │     lint_node → run_lints + lint_result.json (when tests pass)
   │     fix_node → build_corrective_patch + fix_meta.json (on test/lint fail)
-  │     review_node → stub approve / failed on max iterations
+  │     review_node → build_review + review.json (gofmt -d + vet context)
   │     pr_node → final status done or failed
   ├─ build_pr_draft() + write_pr_md()    → PR.md
   ├─ [optional] maybe_create_pr()        → --no-dry-run --create-pr only
@@ -83,7 +85,7 @@ go-agent resume --run-id <uuid>
 
 **Approved repos:** `gin-gonic/gin`, `spf13/cobra`, `go-playground/validator`, `golangci/golangci-lint`
 
-**Test suite:** 213 tests, `pytest -q && ruff check src tests`
+**Test suite:** 226 tests, `pytest -q && ruff check src tests`
 
 ---
 
@@ -110,6 +112,7 @@ All artifacts live under `artifacts/{run_id}/`:
 | `test_result.json` | Backlog #22 | Subprocess test commands, exit codes, stdout/stderr |
 | `lint_result.json` | Backlog #23 | Subprocess lint commands, exit codes, stdout/stderr, file:line findings |
 | `fix_meta.json` | Backlog #24 | Fix iteration, failure source, error summary, files patched |
+| `review.json` | Backlog #26 | Review `decision`, `comments[]`, checklist (AC, tests, API, style, errors) |
 | `resolved.patch` | Backlog #19 | Unified diff after sequential apply / merge |
 | `branch_meta.json` | Backlog #5 | branch name, base SHA, default branch, issue info |
 | `changes.patch` | Backlog #6 | `git diff` from base SHA (after patch apply) |
@@ -149,7 +152,8 @@ Shared checkpoints: `artifacts/checkpoints/checkpoints.db` (LangGraph SqliteSave
 | `test_runner.py` | Subprocess test command runner; writes `test_result.json` |
 | `lint_runner.py` | Subprocess lint/vet runner; writes `lint_result.json` with file:line findings |
 | `fixer.py` | Fix agent; corrective patches from test/lint failures; writes `fix_meta.json` |
-| `orchestrator/` | LangGraph graph; wired plan/code/integrate/test/lint/fix nodes + stub review/pr |
+| `reviewer.py` | Strong-tier review agent; gofmt/vet context; writes `review.json` |
+| `orchestrator/` | LangGraph graph; wired plan/code/integrate/test/lint/fix/review/pr nodes |
 | `orchestrator/checkpointer.py` | SqliteSaver checkpoint DB and invoke config helpers |
 | `orchestrator/runtime.py` | Reconstruct RunContext and Pydantic models from AgentState |
 | `context_builder.py` | Code graph, ranked context bundle, scope enrichment |
@@ -1588,6 +1592,88 @@ pytest -q && ruff check src tests
 
 ---
 
+### Backlog #26 — Review agent
+
+**GitHub:** [#27](https://github.com/DarshanCode2005/Go-PR-Bot/issues/27)  
+**Commit:** (pending) `feat(review): LLM reviewer with review.json (fixes #27)`  
+**PR:** (pending)
+
+#### What was built
+
+**`reviewer.py`**
+
+- `ReviewResult` with `decision` (`approve` | `request_changes` | `reject`), `comments[]`, optional `checklist`
+- `build_review_context()`, `build_review_messages()`, `build_review()`, `write_review()` → `review.json`
+- Strong-tier LLM checklist: issue AC, tests, API breaks, style, error messages
+- JSON parse + validation with single retry (planner pattern)
+
+**`orchestrator/nodes.py`**
+
+- `review_node` wired to `build_review()` when test+lint pass
+- Deterministic `decision=reject` for max iterations / validation failure (no LLM)
+- `status=failed` when decision is not `approve`
+
+**`orchestrator/state.py`**
+
+- `ReviewResult` moved to `reviewer.py`; graph state stores serialized review dict
+
+#### Key decisions
+
+- Review requires LLM (raises `ReviewError` without API key)
+- Max-iteration escape hatch stays deterministic (no LLM spend)
+- `review.json` written only when `artifact_dir` is present in state
+
+#### Tests
+
+- `tests/test_reviewer.py` — parse, messages, mock LLM, artifact, review_node approve/reject
+- `tests/helpers.py` — `mock_build_review()` for offline CLI tests
+
+#### Out of scope
+
+- Review → fix routing loop (Backlog #28)
+
+#### Verification
+
+```bash
+pytest tests/test_reviewer.py tests/test_orchestrator.py -q
+pytest -q && ruff check src tests
+```
+
+---
+
+### Backlog #27 — Review format/lint context
+
+**GitHub:** [#28](https://github.com/DarshanCode2005/Go-PR-Bot/issues/28)  
+**Commit:** (pending) `feat(review): attach gofmt and vet context to reviewer (fixes #28)`  
+**PR:** (pending)
+
+#### What was built
+
+**`reviewer.py`**
+
+- `run_gofmt_diff()` — `gofmt -d` on changed `.go` files (runs even when lint passed)
+- `extract_vet_output()` — vet stderr and structured `file:line` findings from lint state
+- Review prompt sections: `Format check (gofmt -d …)` and `Vet / lint output`
+- System prompt requires citing concrete file/line evidence from gofmt or vet
+
+#### Key decisions
+
+- Format context is advisory for reviewer (lint node still owns pass/fail gates)
+- Changed files from plan.files with patch diff fallback
+
+#### Tests
+
+- `tests/test_reviewer.py` — gofmt diff, vet output in messages, mock comments cite `foo.go`
+
+#### Verification
+
+```bash
+pytest tests/test_reviewer.py -q
+pytest -q && ruff check src tests
+```
+
+---
+
 ## Template for future issues
 
 Copy this block when appending the next implemented issue.
@@ -1681,4 +1767,4 @@ See `.env.example` and `config.py`. Minimum for current pipeline:
 
 ---
 
-*Last updated: after Backlog #25 (GitHub #26) — LangGraph checkpointer and `go-agent resume`.*
+*Last updated: after Backlog #27 (GitHub #28) — review agent with gofmt/vet context.*

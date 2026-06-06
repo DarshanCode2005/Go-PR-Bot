@@ -18,7 +18,8 @@ from go_agent.orchestrator.graph import (
     route_after_test,
     route_after_test_validation,
 )
-from go_agent.orchestrator.state import AgentState, LintResult, ReviewResult, TestResult
+from go_agent.orchestrator.state import AgentState, LintResult, TestResult
+from go_agent.reviewer import ReviewResult
 
 __all__ = [
     "GRAPH_NODE_NAMES",

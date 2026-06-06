@@ -29,6 +29,27 @@ def mock_coder_search_replace(messages: list[dict[str, str]]) -> str:
 
 MOCK_SCOPE_JSON = '{"scope_hints": []}'
 MOCK_SUMMARY = "Summary of the file for the coding agent."
+MOCK_REVIEW_JSON = (
+    '{"decision":"approve","comments":["Tests and lint passed; change matches issue scope"],'
+    '"checklist":{"acceptance_criteria":true,"tests":true,"api_breaks":true,'
+    '"style":true,"error_messages":true}}'
+)
+
+
+def mock_build_review(*args, **kwargs):
+    from go_agent.reviewer import ReviewChecklist, ReviewResult
+
+    return ReviewResult(
+        decision="approve",
+        comments=["Mock review: tests and lint passed"],
+        checklist=ReviewChecklist(
+            acceptance_criteria=True,
+            tests=True,
+            api_breaks=True,
+            style=True,
+            error_messages=True,
+        ),
+    )
 
 
 def mock_run_tests(*args, **kwargs):
@@ -129,6 +150,10 @@ def agent_mock_transport(
         return MOCK_SCOPE_JSON
     if "Summarize this Go source file" in user:
         return MOCK_SUMMARY
+    if "maintainer reviewing" in system.lower() or (
+        "decision" in system and "checklist" in system
+    ):
+        return MOCK_REVIEW_JSON
     if "coder agent" in system.lower() or "SEARCH/REPLACE" in system:
         return mock_coder_search_replace(messages)
     return mock_coder_search_replace(messages)
@@ -152,6 +177,7 @@ def enable_agent_mocks(
         "go_agent.orchestrator.nodes.build_corrective_patch",
         mock_build_corrective_patch,
     )
+    monkeypatch.setattr("go_agent.orchestrator.nodes.build_review", mock_build_review)
 
 
 def enable_planner_mock(

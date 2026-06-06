@@ -39,6 +39,10 @@ go-agent resume --run-id <run_id>
 - **Already complete:** `go-agent resume` exits with code 2 if the graph finished successfully
 - **Overrides:** optional `--dry-run` / `--no-dry-run` and `--create-pr` override values stored in `run_meta.json`
 
+## Review output
+
+After test/lint pass, the review agent writes `artifacts/{run_id}/review.json` with a structured `decision` (`approve`, `request_changes`, or `reject`), actionable `comments[]`, and a checklist covering issue acceptance criteria, tests, API breaks, style, and error messages. The reviewer receives `gofmt -d` output and vet findings as context and cites concrete file/line issues when present.
+
 ## LLM providers
 
 LiteLLM is used as a single provider layer. You can configure either OpenAI or Anthropic.
