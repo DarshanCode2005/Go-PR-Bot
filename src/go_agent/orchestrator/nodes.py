@@ -252,7 +252,11 @@ def fix_node(state: AgentState) -> AgentState:
             iteration=fix_context.iteration,
             max_iterations=fix_context.max_iterations,
             failure_source=fix_context.failure_source,
-            error_summary=fix_context.test_output[:500] or fix_context.lint_output[:500],
+            error_summary=(
+                fix_context.test_output[:500]
+                if fix_context.failure_source == "test"
+                else fix_context.lint_output[:500]
+            ),
             files=[item.path for item in artifact.files],
         ),
     )
