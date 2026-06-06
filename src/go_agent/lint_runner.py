@@ -16,8 +16,6 @@ from go_agent.run_context import RunContext
 from go_agent.skills import resolve_lint_commands
 from go_agent.test_runner import CommandResult, _coerce_output, _truncate
 
-_MAX_OUTPUT_CHARS = 65536
-
 _GO_FILE_LINE = re.compile(
     r"^(?:\./)?(?P<file>[\w./-]+\.go):(?P<line>\d+)"
     r"(?:(?::(?P<col>\d+))?:(?:\s*(?P<message>.+))?)?",
