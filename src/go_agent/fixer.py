@@ -266,6 +266,5 @@ __all__ = [
     "FixMeta",
     "build_corrective_patch",
     "build_failure_context",
-    "write_coder_artifact",
     "write_fix_meta",
 ]
