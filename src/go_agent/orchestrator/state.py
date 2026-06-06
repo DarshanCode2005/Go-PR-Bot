@@ -44,13 +44,6 @@ class LintResult(BaseModel):
     findings: list[dict[str, Any]] = Field(default_factory=list)
 
 
-class ReviewResult(BaseModel):
-    """Reviewer output (stub until review agent is wired)."""
-
-    approved: bool = False
-    comments: list[str] = Field(default_factory=list)
-
-
 class AgentState(TypedDict, total=False):
     """Shared state passed between LangGraph nodes."""
 

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from go_agent.coder import build_proposed_patch, write_coder_artifact
 from go_agent.config import get_settings
 from go_agent.fixer import (
@@ -24,9 +26,10 @@ from go_agent.orchestrator.runtime import (
     repo_path_from_state,
     run_context_from_state,
 )
-from go_agent.orchestrator.state import AgentState, LintResult, ReviewResult, TestResult
+from go_agent.orchestrator.state import AgentState, LintResult, TestResult
 from go_agent.patches import apply_patch_and_commit
 from go_agent.planner import build_fix_plan, write_plan
+from go_agent.reviewer import ReviewError, ReviewResult, build_review, write_review
 from go_agent.test_runner import TestRunError, combined_output, run_tests, write_test_result
 
 
@@ -275,38 +278,68 @@ def review_node(state: AgentState) -> AgentState:
     lint_result = state.get("lint_result") or {}
     test_passed = bool(test_result.get("passed"))
     lint_passed = bool(lint_result.get("passed")) if lint_result else True
+    cap = settings.max_fix_iterations
+    artifact_dir = state.get("artifact_dir")
+
+    def _finish_review(review: ReviewResult, *, failed: bool) -> AgentState:
+        if artifact_dir:
+            ctx = run_context_from_state(state)
+            write_review(ctx, review)
+        status = "failed" if failed else "reviewing"
+        if failed:
+            logger.error(
+                "Review decision=%s after iteration=%d: %s",
+                review.decision,
+                iteration,
+                review.comments[0] if review.comments else "review failed",
+            )
+        else:
+            logger.info("Review decision=%s after iteration=%d", review.decision, iteration)
+        return {
+            "status": status,
+            "last_node": "review",
+            "review": review.model_dump(),
+        }
 
     if test_passed and lint_passed:
-        review = ReviewResult(approved=True, comments=["stub: approved"])
-        logger.info("Review approved after iteration=%d", iteration)
-        return {
-            "status": "reviewing",
-            "last_node": "review",
-            "review": review.model_dump(),
-        }
+        issue = issue_from_state(state)
+        plan = plan_from_state(state)
+        repo_path = repo_path_from_state(state)
+        patch_path = state.get("changes_patch_path")
+        patch_text = ""
+        if patch_path:
+            patch_file = Path(patch_path)
+            if patch_file.is_file():
+                patch_text = patch_file.read_text(encoding="utf-8")
+        try:
+            review = build_review(
+                issue,
+                plan,
+                repo_path=repo_path,
+                patch_text=patch_text,
+                test_result=test_result,
+                lint_result=lint_result,
+                settings=settings,
+                logger=logger,
+            )
+        except ReviewError as exc:
+            logger.error("Reviewer failed: %s", exc)
+            raise
+        failed = review.decision != "approve"
+        return _finish_review(review, failed=failed)
 
-    cap = settings.max_fix_iterations
     if iteration >= cap:
         review = ReviewResult(
-            approved=False,
+            decision="reject",
             comments=[f"max fix iterations ({cap}) exceeded after iteration {iteration}"],
         )
-        logger.error("Review failed: max fix iterations (%d) exceeded at iteration=%d", cap, iteration)
-        return {
-            "status": "failed",
-            "last_node": "review",
-            "review": review.model_dump(),
-        }
+        return _finish_review(review, failed=True)
 
     review = ReviewResult(
-        approved=False,
-        comments=["stub: validation still failing"],
+        decision="reject",
+        comments=["validation still failing"],
     )
-    return {
-        "status": "failed",
-        "last_node": "review",
-        "review": review.model_dump(),
-    }
+    return _finish_review(review, failed=True)
 
 
 def pr_node(state: AgentState) -> AgentState:

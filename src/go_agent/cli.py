@@ -47,6 +47,7 @@ from go_agent.orchestrator import (
 )
 from go_agent.planner import PlanError
 from go_agent.fixer import FixError
+from go_agent.reviewer import ReviewError
 from go_agent.lint_runner import LintFinding, LintRunError, format_finding
 from go_agent.test_runner import TestRunError
 from go_agent.repo_rag import (
@@ -173,6 +174,9 @@ def _handle_graph_exception(exc: Exception, logger: logging.Logger) -> None:
     if isinstance(exc, FixError):
         logger.error("Fix agent failed: %s", exc)
         raise typer.Exit(code=1) from exc
+    if isinstance(exc, ReviewError):
+        logger.error("Reviewer failed: %s", exc)
+        raise typer.Exit(code=1) from exc
     raise exc
 
 
@@ -237,10 +241,12 @@ def _finish_run(
     if patch_file is None and final_state.get("status") == "failed":
         review = final_state.get("review") or {}
         comments = review.get("comments") or []
+        decision = review.get("decision", "reject")
         detail = comments[0] if comments else "validation failed after max fix iterations"
         logger.error(
-            "Run failed after iteration=%d: %s",
+            "Run failed after iteration=%d (decision=%s): %s",
             final_state.get("iteration", 0),
+            decision,
             detail,
         )
         raise typer.Exit(code=1)
