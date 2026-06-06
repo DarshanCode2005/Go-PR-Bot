@@ -9,7 +9,7 @@ from pydantic import BaseModel
 
 from go_agent.branching import BranchInfo
 from go_agent.config import Settings, get_settings
-from go_agent.context_builder import ScopeBundle
+from go_agent.context_builder import ContextBundle, ScopeBundle
 from go_agent.github_issues import IssueContext
 from go_agent.run_context import RunContext
 
@@ -93,3 +93,11 @@ def load_scope_bundle(ctx: RunContext) -> ScopeBundle:
         msg = f"scope_hints.json missing in {ctx.artifact_dir}"
         raise RunMetaError(msg)
     return ScopeBundle.model_validate_json(path.read_text(encoding="utf-8"))
+
+
+def load_context_bundle(ctx: RunContext) -> ContextBundle:
+    path = ctx.artifact_dir / "context_bundle.json"
+    if not path.is_file():
+        msg = f"context_bundle.json missing in {ctx.artifact_dir}"
+        raise RunMetaError(msg)
+    return ContextBundle.model_validate_json(path.read_text(encoding="utf-8"))

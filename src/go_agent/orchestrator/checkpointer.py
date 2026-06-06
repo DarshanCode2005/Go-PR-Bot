@@ -31,8 +31,12 @@ def get_graph_state(compiled: Any, run_id: str) -> Any:
 
 
 def is_run_complete(snapshot: Any) -> bool:
-    """True when the graph has no pending nodes for this thread."""
-    return not snapshot.next
+    """True when the graph ran to completion (no pending nodes and state was written).
+
+    Returns False for a thread with no checkpoint history, which is
+    indistinguishable from an interrupted run at the first node boundary.
+    """
+    return bool(snapshot.values) and not snapshot.next
 
 
 @lru_cache(maxsize=1)

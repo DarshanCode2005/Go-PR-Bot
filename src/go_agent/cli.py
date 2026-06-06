@@ -60,6 +60,7 @@ from go_agent.run_meta import (
     RunMeta,
     RunMetaError,
     load_branch_info,
+    load_context_bundle,
     load_issue_context,
     load_run_meta,
     load_scope_bundle,
@@ -595,9 +596,28 @@ def resume(
         logger.error("Run %s already complete (last_node=%s)", run_id, snapshot.values.get("last_node"))
         raise typer.Exit(code=2)
 
-    logger.info("Resuming run %s from %s", run_id, snapshot.next)
+    if snapshot.values:
+        invoke_state = None
+        logger.info("Resuming run %s from %s", run_id, snapshot.next)
+    else:
+        try:
+            context_bundle = load_context_bundle(ctx)
+        except RunMetaError as exc:
+            logger.error("%s", exc)
+            raise typer.Exit(code=1) from exc
+        invoke_state = _build_initial_graph_state(
+            ctx,
+            meta.repo,
+            meta.issue_number,
+            repo_path,
+            scope_bundle,
+            issue_ctx,
+            context_bundle,
+            branch,
+        )
+        logger.info("Resuming run %s from start (no checkpoint yet)", run_id)
     try:
-        final_state = _invoke_graph(compiled, None, run_id)
+        final_state = _invoke_graph(compiled, invoke_state, run_id)
         logger.info(
             "Resume complete last_node=%s status=%s iteration=%d",
             final_state.get("last_node"),

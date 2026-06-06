@@ -98,6 +98,17 @@ def test_resume_continues_after_interrupt(tmp_path, monkeypatch):
     assert (artifact_dir / "lint_result.json").exists()
 
 
+def test_is_run_complete_empty_thread_is_not_complete(tmp_path, monkeypatch):
+    monkeypatch.setenv("GO_AGENT_ARTIFACTS_DIR", str(tmp_path / "artifacts"))
+    clear_settings_cache()
+    clear_checkpointer_cache()
+    compiled = compile_graph(include_test=True, checkpointer=create_checkpointer(checkpoints_db_path()))
+    snapshot = get_graph_state(compiled, "never-started")
+    assert snapshot.values == {}
+    assert snapshot.next == ()
+    assert not is_run_complete(snapshot)
+
+
 def test_write_run_meta_artifact(tmp_path, monkeypatch):
     monkeypatch.setenv("GO_AGENT_ARTIFACTS_DIR", str(tmp_path / "artifacts"))
     clear_settings_cache()
