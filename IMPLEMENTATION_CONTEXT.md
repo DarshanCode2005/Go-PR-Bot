@@ -27,12 +27,13 @@ Step-by-step record of what was built for each backlog item in [Go-PR-Bot](https
 | #17 Coder agent | [#18](https://github.com/DarshanCode2005/Go-PR-Bot/issues/18) | Done |
 | #18 Parallel coder | [#19](https://github.com/DarshanCode2005/Go-PR-Bot/issues/19) | Done |
 | #19 Integrator | [#20](https://github.com/DarshanCode2005/Go-PR-Bot/issues/20) | Done |
+| #20 LangGraph skeleton | [#21](https://github.com/DarshanCode2005/Go-PR-Bot/issues/21) | Done |
 
 ---
 
 ## Current pipeline state
 
-`go-agent run` today performs setup through scope extraction, then exits with code 1 because the LangGraph agent loop is not wired yet.
+`go-agent run` today runs an imperative pipeline through integrator, patch apply, and PR draft. A LangGraph stub graph exists in `orchestrator/` but is **not wired to the CLI yet**; dry-run still exits 1 after artifacts unless `--create-pr`.
 
 ```
 go-agent run --repo <owner/name> --issue <N>
@@ -62,7 +63,7 @@ go-agent run --repo <owner/name> --issue <N>
 
 **Approved repos:** `gin-gonic/gin`, `spf13/cobra`, `go-playground/validator`, `golangci/golangci-lint`
 
-**Test suite:** 149 tests, `pytest -q && ruff check src tests`
+**Test suite:** 161 tests, `pytest -q && ruff check src tests`
 
 ---
 
@@ -117,6 +118,7 @@ Shared cache: `workspaces/_cache/{owner__repo}/` (shallow clone + `meta.json` + 
 | `planner.py` | Strong-tier planner; Pydantic `FixPlan`; writes `plan.json` |
 | `coder.py` | Fast-tier per-file coder; SEARCH/REPLACE → unified diff; scope guard |
 | `integrator.py` | Sequential patch apply; LLM merge on overlapping hunks |
+| `orchestrator/` | LangGraph `AgentState`, stub nodes, closed-loop graph skeleton |
 | `context_builder.py` | Code graph, ranked context bundle, scope enrichment |
 | `pr_writer.py` | PR draft template + optional LLM; writes `PR.md` |
 | `github_pr.py` | Push branch + `gh pr create --draft`; writes `pr_meta.json` |
@@ -1156,6 +1158,70 @@ pytest -q && ruff check src tests
 #### Verification
 
 ```bash
+pytest -q && ruff check src tests
+```
+
+---
+
+### Backlog #20 — LangGraph AgentState and graph skeleton
+
+**GitHub:** [#21](https://github.com/DarshanCode2005/Go-PR-Bot/issues/21)  
+**Commit:** (pending) `feat(orchestrator): LangGraph AgentState and stub graph (fixes #21)`  
+**PR:** (pending)
+
+#### What was built
+
+**`orchestrator/state.py`**
+
+- `AgentState` TypedDict for LangGraph channel schema
+- Pydantic `TestResult` and `ReviewResult` sub-models (serialized into state dicts)
+
+**`orchestrator/nodes.py`**
+
+- Stub nodes: `plan_node`, `code_node`, `test_node`, `fix_node`, `review_node`, `pr_node`
+- Partial state updates only; no calls to planner/coder/integrator yet
+- Default `test_node` marks tests passed; pre-set `test_result` preserved for routing tests
+
+**`orchestrator/graph.py`**
+
+- `GRAPH_NODE_NAMES`, `build_graph()`, `compile_graph()`, `route_after_test()`
+- Edges: plan → code → test → (fix | review) → pr → END; fix → code loop
+- Fix cap from `max_fix_iterations` (settings or override)
+
+**`docs/ARCHITECTURE.md`**
+
+- Restored from git; added “LangGraph orchestrator (code)” section with Mermaid matching graph topology
+- “Closed-loop state machine” distinguishes conceptual full system vs implemented stub
+
+#### Key decisions
+
+- TypedDict top-level state + Pydantic nested models (matches rest of codebase)
+- Six stub nodes only (no separate `integrate` / `lint` in graph until later issues)
+- Failed tests after max iterations route to `review` with `status="failed"` (escape hatch)
+
+#### Tests
+
+- `tests/test_orchestrator.py` — compile, node/edge introspection, routing, invoke happy path, fix loop, doc parity
+
+#### CLI / pipeline integration
+
+- None — CLI remains imperative; graph compiled via `go_agent.orchestrator.compile_graph()`
+
+#### Dependencies on prior issues
+
+- Backlog #17 — coder pipeline exists (graph `code` node stub only)
+- Backlog #3 — `max_fix_iterations` in settings
+
+#### Out of scope
+
+- Wiring `cli.py` to `compile_graph().invoke()`
+- Real planner/coder/integrator/test subprocess inside nodes
+- LangGraph checkpointer
+
+#### Verification
+
+```bash
+pytest tests/test_orchestrator.py -q
 pytest -q && ruff check src tests
 ```
 
