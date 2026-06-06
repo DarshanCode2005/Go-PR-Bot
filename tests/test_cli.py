@@ -79,3 +79,4 @@ def test_run_dry_run_exits_after_integrate(tmp_path, monkeypatch, bare_repo_url:
     assert len(artifact_dirs) == 1
     assert (artifact_dirs[0] / "changes.patch").exists()
     assert (artifact_dirs[0] / "test_result.json").exists()
+    assert (artifact_dirs[0] / "lint_result.json").exists()

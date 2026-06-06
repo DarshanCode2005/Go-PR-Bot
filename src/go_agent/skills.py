@@ -1,10 +1,11 @@
-"""Repo skill loading and test-command resolution."""
+"""Repo skill loading and test/lint command resolution."""
 
 from __future__ import annotations
 
 import re
+import shutil
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from go_agent.workspace import repo_slug
 
@@ -53,26 +54,27 @@ def load_skill_text(repo: str) -> str:
     return path.read_text(encoding="utf-8").strip()
 
 
-def _parse_frontmatter_test_commands(skill_text: str) -> list[str] | None:
+def _parse_frontmatter_list_commands(skill_text: str, key: str) -> list[str] | None:
     if not skill_text.startswith("---"):
         return None
     parts = skill_text.split("---", 2)
     if len(parts) < 3:
         return None
 
+    prefix = f"{key}:"
     commands: list[str] = []
-    in_test_commands = False
+    in_block = False
     for line in parts[1].splitlines():
         stripped = line.strip()
-        if stripped.startswith("test_commands:"):
-            in_test_commands = True
+        if stripped.startswith(prefix):
+            in_block = True
             inline = stripped.split(":", 1)[1].strip()
             if inline and inline.startswith("["):
                 commands.extend(_split_inline_bracket_list(inline))
             elif inline:
                 commands.append(inline.strip("\"'"))
             continue
-        if in_test_commands:
+        if in_block:
             if stripped.startswith("- "):
                 commands.append(stripped[2:].strip().strip("\"'"))
                 continue
@@ -80,6 +82,10 @@ def _parse_frontmatter_test_commands(skill_text: str) -> list[str] | None:
                 break
     cleaned = [item for item in commands if item]
     return cleaned or None
+
+
+def _parse_frontmatter_test_commands(skill_text: str) -> list[str] | None:
+    return _parse_frontmatter_list_commands(skill_text, "test_commands")
 
 
 def _parse_bash_block_test_commands(skill_text: str) -> list[str] | None:
@@ -109,3 +115,38 @@ def resolve_test_commands(plan: FixPlan, repo: str) -> tuple[list[str], str]:
         if overrides:
             return overrides, "skill_override"
     return list(plan.test_commands), "plan"
+
+
+def _parse_frontmatter_lint_commands(skill_text: str) -> list[str] | None:
+    return _parse_frontmatter_list_commands(skill_text, "lint_commands")
+
+
+def parse_skill_lint_commands(skill_text: str) -> list[str] | None:
+    """Parse explicit lint command overrides from skill markdown frontmatter."""
+    if not skill_text.strip():
+        return None
+    return _parse_frontmatter_lint_commands(skill_text)
+
+
+def default_lint_commands(repo_path: Path) -> list[str]:
+    """Default vet + optional golangci-lint when config and binary are present."""
+    commands = ["go vet ./..."]
+    _golangci_configs = (".golangci.yml", ".golangci.yaml", ".golangci.toml", ".golangci.json")
+    if shutil.which("golangci-lint") and any(
+        (repo_path / name).is_file() for name in _golangci_configs
+    ):
+        commands.append("golangci-lint run")
+    return commands
+
+
+def resolve_lint_commands(
+    repo: str,
+    repo_path: Path,
+) -> tuple[list[str], Literal["default", "skill_override"]]:
+    """Resolve lint commands from repo skill override or defaults."""
+    repo_skill = _SKILLS_ROOT / repo_slug(repo) / "SKILL.md"
+    if repo_skill.is_file():
+        overrides = parse_skill_lint_commands(repo_skill.read_text(encoding="utf-8"))
+        if overrides:
+            return overrides, "skill_override"
+    return default_lint_commands(repo_path), "default"

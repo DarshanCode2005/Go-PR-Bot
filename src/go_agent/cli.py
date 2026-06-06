@@ -35,6 +35,7 @@ from go_agent.coder import CoderError
 from go_agent.integrator import IntegratorError
 from go_agent.orchestrator import compile_graph
 from go_agent.planner import PlanError
+from go_agent.lint_runner import LintFinding, LintRunError, format_finding
 from go_agent.test_runner import TestRunError
 from go_agent.repo_rag import (
     build_rag_query,
@@ -243,6 +244,8 @@ def run(
     patch_text: str | None = None
     commit_message: str | None = None
     tests_passed = True
+    lint_passed = True
+    final_state: dict = {}
     if patch_file is None:
         try:
             final_state = compile_graph(include_test=True).invoke(
@@ -268,10 +271,11 @@ def run(
                 patch_text = Path(changes_path).read_text(encoding="utf-8")
             commit_message = final_state.get("commit_message")
             logger.info(
-                "Validation graph complete last_node=%s patch_applied=%s test_passed=%s",
+                "Validation graph complete last_node=%s patch_applied=%s test_passed=%s lint_passed=%s",
                 final_state.get("last_node"),
                 final_state.get("patch_applied"),
                 (final_state.get("test_result") or {}).get("passed"),
+                (final_state.get("lint_result") or {}).get("passed"),
             )
         except PlanError as exc:
             logger.error("Planner failed: %s", exc)
@@ -288,8 +292,14 @@ def run(
         except TestRunError as exc:
             logger.error("Test runner failed: %s", exc)
             raise typer.Exit(code=1) from exc
+        except LintRunError as exc:
+            logger.error("Lint runner failed: %s", exc)
+            raise typer.Exit(code=1) from exc
 
         tests_passed = bool((final_state.get("test_result") or {}).get("passed"))
+        lint_result = final_state.get("lint_result")
+        if lint_result is not None:
+            lint_passed = bool(lint_result.get("passed"))
     elif patch_file is not None:
         try:
             patch_text = patch_file.read_text(encoding="utf-8")
@@ -325,6 +335,22 @@ def run(
 
     if patch_file is None and not tests_passed:
         logger.error("Tests failed; see %s/test_result.json", ctx.artifact_dir)
+        raise typer.Exit(code=1)
+
+    if patch_file is None and not lint_passed:
+        lint_result = final_state.get("lint_result") or {}
+        findings = lint_result.get("findings") or []
+        if findings:
+            sample = ", ".join(
+                format_finding(LintFinding(**finding)) for finding in findings[:3]
+            )
+            logger.error(
+                "Lint failed (%s); see %s/lint_result.json",
+                sample,
+                ctx.artifact_dir,
+            )
+        else:
+            logger.error("Lint failed; see %s/lint_result.json", ctx.artifact_dir)
         raise typer.Exit(code=1)
 
     if not dry_run and create_pr:

@@ -5,6 +5,8 @@ from __future__ import annotations
 from go_agent.coder import build_proposed_patch, write_coder_artifact
 from go_agent.config import get_settings
 from go_agent.integrator import integrate_file_patches, write_integrator_artifact
+from go_agent.lint_runner import LintRunError, combined_output as lint_combined_output
+from go_agent.lint_runner import run_lints, write_lint_result
 from go_agent.orchestrator.runtime import (
     branch_base_sha,
     bundle_from_state,
@@ -15,7 +17,7 @@ from go_agent.orchestrator.runtime import (
     repo_path_from_state,
     run_context_from_state,
 )
-from go_agent.orchestrator.state import AgentState, ReviewResult, TestResult
+from go_agent.orchestrator.state import AgentState, LintResult, ReviewResult, TestResult
 from go_agent.patches import apply_patch_and_commit
 from go_agent.planner import build_fix_plan, write_plan
 from go_agent.test_runner import TestRunError, combined_output, run_tests, write_test_result
@@ -153,6 +155,46 @@ def test_node(state: AgentState) -> AgentState:
         "status": "testing",
         "last_node": "test",
         "test_result": test_result.model_dump(),
+    }
+
+
+def lint_node(state: AgentState) -> AgentState:
+    ctx = run_context_from_state(state)
+    settings = get_settings()
+    logger = logger_for_state(state)
+    repo_path = repo_path_from_state(state)
+    issue = issue_from_state(state)
+
+    try:
+        result = run_lints(repo_path, issue.repo, settings, logger=logger)
+    except LintRunError as exc:
+        if exc.result is not None:
+            write_lint_result(ctx, exc.result)
+        raise
+    write_lint_result(ctx, result)
+    output = lint_combined_output(result)
+    last_command = result.commands[-1] if result.commands else None
+    first_failed = next((c for c in result.commands if not c.passed), None)
+    lint_result = LintResult(
+        passed=result.passed,
+        exit_code=first_failed.exit_code if first_failed else (last_command.exit_code if last_command else 0),
+        output=output,
+        command=result.resolved_commands[0] if result.resolved_commands else "",
+        commands=result.resolved_commands,
+        source=result.source,
+        findings=[finding.model_dump() for finding in result.findings],
+    )
+    logger.info(
+        "Lint %s (%d command(s), source=%s, %d finding(s))",
+        "passed" if result.passed else "failed",
+        len(result.commands),
+        result.source,
+        len(result.findings),
+    )
+    return {
+        "status": "linting",
+        "last_node": "lint",
+        "lint_result": lint_result.model_dump(),
     }
 
 

@@ -53,6 +53,29 @@ def mock_run_tests(*args, **kwargs):
     )
 
 
+def mock_run_lints(*args, **kwargs):
+    from go_agent.lint_runner import LintRunResult
+    from go_agent.test_runner import CommandResult
+
+    command = "go vet ./..."
+    return LintRunResult(
+        passed=True,
+        commands=[
+            CommandResult(
+                command=command,
+                exit_code=0,
+                passed=True,
+                stdout="ok",
+                stderr="",
+                duration_seconds=0.1,
+            )
+        ],
+        resolved_commands=[command],
+        source="default",
+        findings=[],
+    )
+
+
 def run_git(args: list[str], *, cwd: Path) -> None:
     subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True)
 
@@ -107,6 +130,7 @@ def enable_agent_mocks(
     effective_transport = transport or agent_mock_transport
     monkeypatch.setattr("go_agent.llm_client._TRANSPORT", effective_transport)
     monkeypatch.setattr("go_agent.orchestrator.nodes.run_tests", mock_run_tests)
+    monkeypatch.setattr("go_agent.orchestrator.nodes.run_lints", mock_run_lints)
 
 
 def enable_planner_mock(
