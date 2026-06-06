@@ -31,9 +31,10 @@ from go_agent.github_pr import PRCreateError, maybe_create_pr
 from go_agent.patches import PatchApplyError, apply_patch_and_commit
 from go_agent.pr_writer import build_pr_draft, write_pr_md
 from go_agent.repo_map import build_repo_map, write_repo_map
-from go_agent.coder import CoderError, build_proposed_patch, write_coder_artifact
-from go_agent.integrator import IntegratorError, integrate_file_patches, write_integrator_artifact
-from go_agent.planner import PlanError, build_fix_plan, write_plan
+from go_agent.coder import CoderError
+from go_agent.integrator import IntegratorError
+from go_agent.orchestrator import compile_graph
+from go_agent.planner import PlanError
 from go_agent.repo_rag import (
     build_rag_query,
     merge_search_hits,
@@ -220,20 +221,6 @@ def run(
             context_bundle.total_chars,
             context_bundle.budget_chars,
         )
-        fix_plan = build_fix_plan(
-            issue_ctx,
-            context_bundle,
-            scope_bundle.scope_hints,
-            settings,
-            logger=logger,
-        )
-        write_plan(ctx, fix_plan)
-        logger.info(
-            "Fix plan: %d files, %d steps, %d test commands",
-            len(fix_plan.files),
-            len(fix_plan.steps),
-            len(fix_plan.test_commands),
-        )
         branch = create_issue_branch(repo_path, issue, issue_ctx.title, logger)
         write_branch_meta(ctx, branch)
         logger.info(
@@ -248,9 +235,6 @@ def run(
     except IssueFetchError as exc:
         logger.error("%s", exc)
         raise typer.Exit(code=1) from exc
-    except PlanError as exc:
-        logger.error("Planner failed: %s", exc)
-        raise typer.Exit(code=1) from exc
     except BranchError as exc:
         logger.error("Branch creation failed: %s", exc)
         raise typer.Exit(code=1) from exc
@@ -259,40 +243,36 @@ def run(
     commit_message: str | None = None
     if patch_file is None:
         try:
-            coder_artifact = build_proposed_patch(
-                repo_path,
-                issue_ctx,
-                fix_plan,
-                context_bundle,
-                settings,
-                logger=logger,
+            final_state = compile_graph(implement_only=True).invoke(
+                {
+                    "run_id": ctx.run_id,
+                    "repo": repo,
+                    "issue_number": issue,
+                    "artifact_dir": str(ctx.artifact_dir),
+                    "repo_path": str(repo_path),
+                    "scope_hints": scope_bundle.scope_hints,
+                    "issue_context": issue_ctx.model_dump(),
+                    "context_bundle": context_bundle.model_dump(),
+                    "branch_meta": {
+                        "base_sha": branch.base_sha,
+                        "branch_name": branch.branch_name,
+                    },
+                    "iteration": 0,
+                    "stop_after_integrate": True,
+                }
             )
-            write_coder_artifact(ctx, coder_artifact)
-            integrator_result = integrate_file_patches(
-                repo_path,
-                coder_artifact.files,
-                fix_plan,
-                branch.base_sha,
-                settings,
-                logger=logger,
-            )
-            write_integrator_artifact(ctx, integrator_result)
-            result = apply_patch_and_commit(
-                repo_path,
-                ctx,
-                integrator_result.resolved_patch,
-                issue,
-                issue_ctx.title[:50],
-                branch.base_sha,
-                logger,
-            )
-            patch_text = result.changes_patch_path.read_text(encoding="utf-8")
-            commit_message = result.commit_message
+            changes_path = final_state.get("changes_patch_path")
+            if changes_path:
+                patch_text = Path(changes_path).read_text(encoding="utf-8")
+            commit_message = final_state.get("commit_message")
             logger.info(
-                "Coder patch applied; commit %s; changes at %s",
-                result.commit_sha[:8],
-                result.changes_patch_path,
+                "Implement graph complete last_node=%s patch_applied=%s",
+                final_state.get("last_node"),
+                final_state.get("patch_applied"),
             )
+        except PlanError as exc:
+            logger.error("Planner failed: %s", exc)
+            raise typer.Exit(code=1) from exc
         except CoderError as exc:
             logger.error("Coder failed: %s", exc)
             raise typer.Exit(code=1) from exc
@@ -300,7 +280,7 @@ def run(
             logger.error("Integrator failed: %s", exc)
             raise typer.Exit(code=1) from exc
         except PatchApplyError as exc:
-            logger.error("Coder patch apply failed: %s", exc)
+            logger.error("Integrator patch apply failed: %s", exc)
             raise typer.Exit(code=1) from exc
     elif patch_file is not None:
         try:
@@ -352,14 +332,13 @@ def run(
             logger.error("%s", exc)
             raise typer.Exit(code=1) from exc
 
-    logger.warning(
-        "Pipeline not implemented yet: %s#%s dry_run=%s create_pr=%s",
+    logger.info(
+        "Dry run complete: %s#%s artifacts at %s",
         repo,
         issue,
-        dry_run,
-        create_pr,
+        ctx.artifact_dir,
     )
-    raise typer.Exit(code=1)
+    raise typer.Exit(code=0)
 
 
 def main() -> None:

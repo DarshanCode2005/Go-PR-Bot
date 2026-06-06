@@ -10,9 +10,11 @@ from typing_extensions import TypedDict
 AgentStatus = Literal[
     "planning",
     "coding",
+    "integrating",
     "testing",
     "fixing",
     "reviewing",
+    "shipping",
     "done",
     "failed",
 ]
@@ -39,9 +41,21 @@ class AgentState(TypedDict, total=False):
     run_id: str
     repo: str
     issue_number: int
+    artifact_dir: str
+    repo_path: str
+    scope_hints: list[str]
+    issue_context: dict[str, Any]
+    context_bundle: dict[str, Any]
+    branch_meta: dict[str, Any]
+    fix_plan: dict[str, Any]
     status: AgentStatus
     iteration: int
     last_node: str
     test_result: dict[str, Any]
     review: dict[str, Any]
+    patch_applied: bool
+    changes_patch_path: str
+    commit_sha: str
+    commit_message: str
+    stop_after_integrate: bool
     error: str | None

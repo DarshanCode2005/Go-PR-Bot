@@ -28,12 +28,13 @@ Step-by-step record of what was built for each backlog item in [Go-PR-Bot](https
 | #18 Parallel coder | [#19](https://github.com/DarshanCode2005/Go-PR-Bot/issues/19) | Done |
 | #19 Integrator | [#20](https://github.com/DarshanCode2005/Go-PR-Bot/issues/20) | Done |
 | #20 LangGraph skeleton | [#21](https://github.com/DarshanCode2005/Go-PR-Bot/issues/21) | Done |
+| #21 Wire Epic 4 nodes | [#22](https://github.com/DarshanCode2005/Go-PR-Bot/issues/22) | Done |
 
 ---
 
 ## Current pipeline state
 
-`go-agent run` today runs an imperative pipeline through integrator, patch apply, and PR draft. A LangGraph stub graph exists in `orchestrator/` but is **not wired to the CLI yet**; dry-run still exits 1 after artifacts unless `--create-pr`.
+`go-agent run` performs CLI setup (clone through context bundle and branch), then invokes the LangGraph **implement graph** (`plan → code → integrate → END`). Patches are applied locally on the issue branch; dry-run exits **0** after PR draft. Test/review/pr nodes remain stubbed for later issues.
 
 ```
 go-agent run --repo <owner/name> --issue <N>
@@ -49,21 +50,21 @@ go-agent run --repo <owner/name> --issue <N>
   ├─ prepare_scope() + ripgrep search     → scope_hints.json + search_hits.json
   ├─ [optional --rag] semantic retrieval  → rag_hits.json merged into search hits
   ├─ build_context_bundle()             → code_graph.json + context_bundle.json
-  ├─ build_fix_plan()                   → plan.json (fails run if planner cannot complete)
   ├─ create_issue_branch()         → agent/issue-{N}-{slug}
   ├─ write_branch_meta()           → branch_meta.json
-  ├─ build_proposed_patch()        → wave-scheduled parallel coder → proposed.patch + coder_meta.json
-  ├─ integrate_file_patches()      → sequential apply + LLM merge → resolved.patch + integrator_meta.json
-  ├─ apply_patch_and_commit()      → resolved patch or --patch-file dev path
+  ├─ LangGraph implement graph:
+  │     plan_node → build_fix_plan + plan.json
+  │     code_node → build_proposed_patch + proposed.patch + coder_meta.json
+  │     integrate_node → integrate + apply_patch_and_commit → changes.patch
   ├─ build_pr_draft() + write_pr_md()    → PR.md
   ├─ [optional] maybe_create_pr()        → --no-dry-run --create-pr only
   │     push branch + gh pr create --draft → pr_meta.json, exit 0
-  └─ exit 1 — "Pipeline not implemented yet" (dry-run default)
+  └─ dry-run exit 0
 ```
 
 **Approved repos:** `gin-gonic/gin`, `spf13/cobra`, `go-playground/validator`, `golangci/golangci-lint`
 
-**Test suite:** 161 tests, `pytest -q && ruff check src tests`
+**Test suite:** 165 tests, `pytest -q && ruff check src tests`
 
 ---
 
@@ -118,7 +119,8 @@ Shared cache: `workspaces/_cache/{owner__repo}/` (shallow clone + `meta.json` + 
 | `planner.py` | Strong-tier planner; Pydantic `FixPlan`; writes `plan.json` |
 | `coder.py` | Fast-tier per-file coder; SEARCH/REPLACE → unified diff; scope guard |
 | `integrator.py` | Sequential patch apply; LLM merge on overlapping hunks |
-| `orchestrator/` | LangGraph `AgentState`, stub nodes, closed-loop graph skeleton |
+| `orchestrator/` | LangGraph graph; wired `plan`/`code`/`integrate` nodes + stub test/fix/review/pr |
+| `orchestrator/runtime.py` | Reconstruct RunContext and Pydantic models from AgentState |
 | `context_builder.py` | Code graph, ranked context bundle, scope enrichment |
 | `pr_writer.py` | PR draft template + optional LLM; writes `PR.md` |
 | `github_pr.py` | Push branch + `gh pr create --draft`; writes `pr_meta.json` |
@@ -1222,6 +1224,63 @@ pytest -q && ruff check src tests
 
 ```bash
 pytest tests/test_orchestrator.py -q
+pytest -q && ruff check src tests
+```
+
+---
+
+### Backlog #21 — Wire planner → coder → integrator nodes
+
+**GitHub:** [#22](https://github.com/DarshanCode2005/Go-PR-Bot/issues/22)  
+**Commit:** (pending) `feat(orchestrator): wire plan/code/integrate nodes and CLI implement graph (fixes #22)`  
+**PR:** (pending)
+
+#### What was built
+
+**`orchestrator/runtime.py`**
+
+- `run_context_from_state()`, `issue_from_state()`, `bundle_from_state()`, `plan_from_state()`, `branch_base_sha()`, `coder_artifact_from_state()`
+
+**`orchestrator/nodes.py`**
+
+- `plan_node` → `build_fix_plan` + `write_plan`
+- `code_node` → `build_proposed_patch` + `write_coder_artifact`
+- `integrate_node` → `integrate_file_patches` + `write_integrator_artifact` + `apply_patch_and_commit`
+- `test`/`fix`/`review`/`pr` remain stubs
+
+**`orchestrator/graph.py`**
+
+- `IMPLEMENT_NODE_NAMES = (plan, code, integrate)`
+- `compile_graph(implement_only=True)` — default CLI path ends at END after integrate
+- `compile_graph(implement_only=False)` — full graph with integrate → test → fix loop
+
+**`cli.py`**
+
+- Setup through branch pre-graph; invokes implement graph; dry-run exits 0 after PR draft
+- `--patch-file` dev path unchanged (skips graph)
+
+#### Key decisions
+
+- CLI keeps clone/issue/context/branch outside graph; Epic 4 agents run inside graph nodes
+- Implement graph ENDs after integrate (test/review/pr deferred)
+- AgentState extended with artifact paths, serialized context, branch_meta, patch results
+
+#### Tests
+
+- `tests/test_orchestrator.py` — implement vs full graph, wired invoke with mocks, E2E graph invoke with agent mocks
+- `tests/test_cli.py`, `tests/test_cli_branch.py`, `tests/test_run_context.py` — dry-run exit 0, `changes.patch` present
+- `tests/helpers.py` — `init_git_repo()` helper
+
+#### Out of scope
+
+- Subprocess test/lint nodes
+- Review agent wiring
+- LangGraph checkpointer
+
+#### Verification
+
+```bash
+pytest tests/test_orchestrator.py tests/test_cli.py tests/test_cli_branch.py -q
 pytest -q && ruff check src tests
 ```
 
