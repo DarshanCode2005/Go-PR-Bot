@@ -196,7 +196,7 @@ def test_dry_run_does_not_call_gh(tmp_path, monkeypatch, bare_repo_url: str):
                     ["run", "--repo", TEST_REPO, "--issue", "42", "--dry-run"],
                 )
     maybe_create.assert_not_called()
-    assert result.exit_code == 1
+    assert result.exit_code == 0
 
 
 def test_create_pr_path_calls_gh(tmp_path, monkeypatch, bare_repo_url: str):

@@ -1,27 +1,122 @@
-"""Stub LangGraph node functions — real agent wiring deferred to a later issue."""
+"""LangGraph node functions — plan/code/integrate wired; test/fix/review/pr stubbed."""
 
 from __future__ import annotations
 
+from go_agent.coder import build_proposed_patch, write_coder_artifact
+from go_agent.config import get_settings
+from go_agent.integrator import integrate_file_patches, write_integrator_artifact
+from go_agent.orchestrator.runtime import (
+    branch_base_sha,
+    bundle_from_state,
+    coder_artifact_from_state,
+    issue_from_state,
+    logger_for_state,
+    plan_from_state,
+    repo_path_from_state,
+    run_context_from_state,
+)
 from go_agent.orchestrator.state import AgentState, ReviewResult, TestResult
+from go_agent.patches import apply_patch_and_commit
+from go_agent.planner import build_fix_plan, write_plan
 
 
 def plan_node(state: AgentState) -> AgentState:
+    ctx = run_context_from_state(state)
+    settings = get_settings()
+    logger = logger_for_state(state)
+    issue = issue_from_state(state)
+    bundle = bundle_from_state(state)
+    scope_hints = state.get("scope_hints") or []
+
+    fix_plan = build_fix_plan(
+        issue,
+        bundle,
+        scope_hints,
+        settings,
+        logger=logger,
+    )
+    write_plan(ctx, fix_plan)
+    logger.info(
+        "Fix plan: %d files, %d steps, %d test commands",
+        len(fix_plan.files),
+        len(fix_plan.steps),
+        len(fix_plan.test_commands),
+    )
     return {
         "status": "planning",
         "last_node": "plan",
+        "fix_plan": fix_plan.model_dump(),
     }
 
 
 def code_node(state: AgentState) -> AgentState:
+    ctx = run_context_from_state(state)
+    settings = get_settings()
+    logger = logger_for_state(state)
+    repo_path = repo_path_from_state(state)
+    issue = issue_from_state(state)
+    plan = plan_from_state(state)
+    bundle = bundle_from_state(state)
+
+    artifact = build_proposed_patch(
+        repo_path,
+        issue,
+        plan,
+        bundle,
+        settings,
+        logger=logger,
+    )
+    write_coder_artifact(ctx, artifact)
     return {
         "status": "coding",
         "last_node": "code",
     }
 
 
+def integrate_node(state: AgentState) -> AgentState:
+    ctx = run_context_from_state(state)
+    settings = get_settings()
+    logger = logger_for_state(state)
+    repo_path = repo_path_from_state(state)
+    issue = issue_from_state(state)
+    plan = plan_from_state(state)
+    base_sha = branch_base_sha(state)
+    artifact = coder_artifact_from_state(state)
+
+    result = integrate_file_patches(
+        repo_path,
+        artifact.files,
+        plan,
+        base_sha,
+        settings,
+        logger=logger,
+    )
+    write_integrator_artifact(ctx, result)
+    patch_result = apply_patch_and_commit(
+        repo_path,
+        ctx,
+        result.resolved_patch,
+        issue.number,
+        issue.title[:50],
+        base_sha,
+        logger,
+    )
+    logger.info(
+        "Integrator patch applied; commit %s; changes at %s",
+        patch_result.commit_sha[:8],
+        patch_result.changes_patch_path,
+    )
+    return {
+        "status": "integrating",
+        "last_node": "integrate",
+        "patch_applied": True,
+        "changes_patch_path": str(patch_result.changes_patch_path),
+        "commit_sha": patch_result.commit_sha,
+        "commit_message": patch_result.commit_message,
+    }
+
+
 def test_node(state: AgentState) -> AgentState:
-    # Stub always marks tests passed. Overwrite test_result on every call so a
-    # prior failure does not stick after a successful fix.
     result = TestResult(passed=True, output="stub: tests passed", command="stub")
     return {
         "status": "testing",

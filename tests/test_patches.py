@@ -196,7 +196,7 @@ def test_cli_patch_file(tmp_path, monkeypatch, bare_repo_url: str):
                 ],
             )
 
-    assert result.exit_code == 1
+    assert result.exit_code == 0
     artifact_dirs = [p for p in (tmp_path / "artifacts").iterdir() if p.is_dir()]
     changes = artifact_dirs[0] / "changes.patch"
     assert changes.exists()

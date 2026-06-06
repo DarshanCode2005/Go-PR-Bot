@@ -77,7 +77,7 @@ def test_cli_run_creates_artifact_dir(tmp_path, monkeypatch, bare_repo_url: str)
     with patch("go_agent.cli.fetch_issue_context", return_value=issue_ctx):
         with patch("go_agent.workspace.github_url", return_value=bare_repo_url):
             result = runner.invoke(app, ["run", "--repo", "gin-gonic/gin", "--issue", "1"])
-    assert result.exit_code == 1
+    assert result.exit_code == 0
 
     subdirs = [p for p in artifacts.iterdir() if p.is_dir()]
     assert len(subdirs) == 1
@@ -85,6 +85,7 @@ def test_cli_run_creates_artifact_dir(tmp_path, monkeypatch, bare_repo_url: str)
     assert run_log.exists()
     log_text = run_log.read_text(encoding="utf-8")
     assert "Starting run" in log_text
-    assert "not implemented" in log_text.lower()
+    assert "Dry run complete" in log_text
     assert (subdirs[0] / "proposed.patch").exists()
     assert (subdirs[0] / "integrator_meta.json").exists()
+    assert (subdirs[0] / "changes.patch").exists()

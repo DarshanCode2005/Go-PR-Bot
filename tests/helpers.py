@@ -35,6 +35,20 @@ def run_git(args: list[str], *, cwd: Path) -> None:
     subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True)
 
 
+def init_git_repo(repo_path: Path, *, files: dict[str, str] | None = None) -> None:
+    """Initialize a git repo with an initial commit."""
+    repo_path.mkdir(parents=True, exist_ok=True)
+    run_git(["init"], cwd=repo_path)
+    run_git(["config", "user.email", "test@example.com"], cwd=repo_path)
+    run_git(["config", "user.name", "Test"], cwd=repo_path)
+    for rel_path, content in (files or {"README.md": "hello\n"}).items():
+        target = repo_path / rel_path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(content, encoding="utf-8")
+        run_git(["add", rel_path], cwd=repo_path)
+    run_git(["commit", "-m", "init"], cwd=repo_path)
+
+
 def agent_mock_transport(
     *,
     model: str | None = None,

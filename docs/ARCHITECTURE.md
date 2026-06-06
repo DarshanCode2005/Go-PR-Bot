@@ -122,7 +122,7 @@ flowchart TB
 
 The **conceptual** end-state includes parallel coders, an integrator node, and a separate lint step. Those are implemented in the imperative CLI today (`coder.py`, `integrator.py`) and will be wired into LangGraph in later issues.
 
-The **implemented stub graph** lives in `go_agent.orchestrator` (see [LangGraph orchestrator (code)](#langgraph-orchestrator-code) below). State is defined in `orchestrator/state.py`:
+The **implement graph** (default CLI path) lives in `go_agent.orchestrator` (see [LangGraph orchestrator (code)](#langgraph-orchestrator-code) below). CLI performs clone, issue fetch, context bundle, and branch creation **before** invoking the graph. State is defined in `orchestrator/state.py`:
 
 ```python
 # AgentState (TypedDict) + Pydantic sub-models TestResult, ReviewResult
@@ -152,20 +152,34 @@ Conceptual edges (full system, not all nodes in stub graph yet):
 
 Module: [`src/go_agent/orchestrator/`](../src/go_agent/orchestrator/)
 
-Stub nodes: `plan`, `code`, `test`, `fix`, `review`, `pr`. Node functions return partial state updates only; real agent calls are wired in a later issue. Fix-loop cap uses `GO_AGENT_MAX_FIX_ITERATIONS` (default 5).
+**Wired nodes (Epic 4):** `plan`, `code`, `integrate` — call `build_fix_plan`, `build_proposed_patch`, and `integrate_file_patches` + `apply_patch_and_commit`. CLI invokes `compile_graph(implement_only=True)` after setup and branch creation.
+
+**Stub nodes (later issues):** `test`, `fix`, `review`, `pr` — exist in `build_graph(implement_only=False)` but are not reached from the default implement graph.
+
+Default implement graph (`implement_only=True`):
 
 ```mermaid
 flowchart TB
   plan --> code
-  code --> test
+  code --> integrate
+  integrate --> endNode["END"]
+```
+
+Full closed-loop graph (`implement_only=False`, for future test/review wiring):
+
+```mermaid
+flowchart TB
+  plan --> code
+  code --> integrate
+  integrate --> test
   test -->|"fail and iteration lt max"| fix
   test -->|pass or max iterations| review
   fix --> code
   review --> pr
-  pr --> endNode["END"]
+  pr --> endNodeFull["END"]
 ```
 
-Routing from `test`:
+Routing from `test` (full graph only):
 
 | Condition | Next node |
 |-----------|-----------|
@@ -173,7 +187,7 @@ Routing from `test`:
 | failed and `iteration < max_fix_iterations` | `fix` |
 | failed and `iteration >= max_fix_iterations` | `review` (status `failed`) |
 
-`fix` increments `iteration` and always returns to `code`.
+`fix` increments `iteration` and returns to `code`. Fix-loop cap uses `GO_AGENT_MAX_FIX_ITERATIONS` (default 5).
 
 ---
 

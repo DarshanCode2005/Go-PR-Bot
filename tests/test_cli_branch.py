@@ -39,12 +39,14 @@ def test_run_writes_branch_meta(tmp_path, monkeypatch, bare_repo_url: str):
                 ["run", "--repo", "gin-gonic/gin", "--issue", "99"],
             )
 
-    assert result.exit_code == 1
+    assert result.exit_code == 0
     artifact_dirs = [p for p in (tmp_path / "artifacts").iterdir() if p.is_dir()]
     assert len(artifact_dirs) == 1
     branch_meta = artifact_dirs[0] / "branch_meta.json"
     assert branch_meta.exists()
     assert "agent/issue-99-fix-stuff" in branch_meta.read_text(encoding="utf-8")
+    assert (artifact_dirs[0] / "plan.json").exists()
     assert (artifact_dirs[0] / "proposed.patch").exists()
     assert (artifact_dirs[0] / "coder_meta.json").exists()
     assert (artifact_dirs[0] / "integrator_meta.json").exists()
+    assert (artifact_dirs[0] / "changes.patch").exists()
