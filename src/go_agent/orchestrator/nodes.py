@@ -129,9 +129,10 @@ def test_node(state: AgentState) -> AgentState:
     write_test_result(ctx, result)
     output = combined_output(result)
     last_command = result.commands[-1] if result.commands else None
+    first_failed = next((c for c in result.commands if not c.passed), None)
     test_result = TestResult(
         passed=result.passed,
-        exit_code=last_command.exit_code if last_command else 1,
+        exit_code=first_failed.exit_code if first_failed else (last_command.exit_code if last_command else 0),
         output=output,
         command=result.resolved_commands[0] if result.resolved_commands else "",
         commands=result.resolved_commands,
