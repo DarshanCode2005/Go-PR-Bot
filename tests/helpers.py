@@ -176,3 +176,10 @@ def bump_bare_repo(bare_repo_url: str, tmp_path: Path, *, content: str = "v2\n")
     run_git(["commit", "-am", "bump"], cwd=work)
     run_git(["push", "origin", "HEAD"], cwd=work)
     return bare.as_uri()
+
+
+def list_run_artifact_dirs(artifacts_dir: Path) -> list[Path]:
+    """Return per-run artifact directories, excluding shared checkpoints storage."""
+    return [
+        p for p in artifacts_dir.iterdir() if p.is_dir() and p.name != "checkpoints"
+    ]

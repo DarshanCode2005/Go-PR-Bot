@@ -4,7 +4,7 @@ from typer.testing import CliRunner
 
 from go_agent.cli import app
 from go_agent.github_issues import IssueContext
-from helpers import enable_planner_mock
+from helpers import enable_planner_mock, list_run_artifact_dirs
 
 runner = CliRunner()
 
@@ -19,6 +19,7 @@ def test_main_help():
     result = runner.invoke(app, ["--help"])
     assert result.exit_code == 0
     assert "run" in result.stdout
+    assert "resume" in result.stdout
     assert "version" in result.stdout
     assert "gin-gonic/gin" in result.stdout
 
@@ -75,7 +76,7 @@ def test_run_dry_run_exits_after_integrate(tmp_path, monkeypatch, bare_repo_url:
             result = runner.invoke(app, ["run", "--repo", "gin-gonic/gin", "--issue", "1"])
     assert result.exit_code == 0
     assert "not implemented" not in (result.stdout + result.stderr).lower()
-    artifact_dirs = [p for p in (tmp_path / "artifacts").iterdir() if p.is_dir()]
+    artifact_dirs = list_run_artifact_dirs(tmp_path / "artifacts")
     assert len(artifact_dirs) == 1
     assert (artifact_dirs[0] / "changes.patch").exists()
     assert (artifact_dirs[0] / "test_result.json").exists()

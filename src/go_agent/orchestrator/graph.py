@@ -144,6 +144,7 @@ def compile_graph(
     implement_only: bool | None = None,
     max_fix_iterations: int | None = None,
     settings: Settings | None = None,
+    checkpointer=None,
 ):
     """Compile the orchestrator graph for invoke/stream."""
     return build_graph(
@@ -152,4 +153,4 @@ def compile_graph(
         implement_only=implement_only,
         max_fix_iterations=max_fix_iterations,
         settings=settings,
-    ).compile()
+    ).compile(checkpointer=checkpointer)

@@ -32,12 +32,13 @@ Step-by-step record of what was built for each backlog item in [Go-PR-Bot](https
 | #22 Subprocess test runner | [#23](https://github.com/DarshanCode2005/Go-PR-Bot/issues/23) | Done |
 | #23 Subprocess lint runner | [#24](https://github.com/DarshanCode2005/Go-PR-Bot/issues/24) | Done |
 | #24 Fix agent closed loop | [#25](https://github.com/DarshanCode2005/Go-PR-Bot/issues/25) | Done |
+| #25 LangGraph checkpointer | [#26](https://github.com/DarshanCode2005/Go-PR-Bot/issues/26) | Done |
 
 ---
 
 ## Current pipeline state
 
-`go-agent run` performs CLI setup (clone through context bundle and branch), then invokes the LangGraph **closed-loop graph** (`plan → code → integrate → test → lint → review → pr`). On test/lint failure, routes to `fix → code → integrate` until pass or `max_fix_iterations` (default 5). Exits **0** on success or **1** on validation/fix failure or max iterations exceeded.
+`go-agent run` performs CLI setup (clone through context bundle and branch), writes `run_meta.json`, then invokes the LangGraph **closed-loop graph** with a SqliteSaver checkpointer (`thread_id` = run UUID). Checkpoints are written after each node. On test/lint failure, routes to `fix → code → integrate` until pass or `max_fix_iterations` (default 5). Use `go-agent resume --run-id <uuid>` to continue from the last checkpoint if a run is interrupted.
 
 ```
 go-agent run --repo <owner/name> --issue <N>
@@ -55,7 +56,8 @@ go-agent run --repo <owner/name> --issue <N>
   ├─ build_context_bundle()             → code_graph.json + context_bundle.json
   ├─ create_issue_branch()         → agent/issue-{N}-{slug}
   ├─ write_branch_meta()           → branch_meta.json
-  ├─ LangGraph closed-loop graph:
+  ├─ write_run_meta()              → run_meta.json (repo, flags, paths for resume)
+  ├─ LangGraph closed-loop graph (checkpoints → artifacts/checkpoints/checkpoints.db):
   │     plan_node → build_fix_plan + plan.json
   │     code_node → build_proposed_patch + proposed.patch + coder_meta.json
   │     integrate_node → integrate + apply_patch_and_commit → changes.patch
@@ -68,11 +70,20 @@ go-agent run --repo <owner/name> --issue <N>
   ├─ [optional] maybe_create_pr()        → --no-dry-run --create-pr only
   │     push branch + gh pr create --draft → pr_meta.json, exit 0
   └─ dry-run exit 0 (exit 1 if validation/fix failed or max iterations exceeded)
+
+go-agent resume --run-id <uuid>
+  │
+  ├─ load_run_meta() + resolve_run_context()
+  ├─ configure_run_logging()       → append to artifacts/{run_id}/run.log
+  ├─ verify workspace + artifact JSON on disk
+  ├─ compile_graph(checkpointer=...) with flags from run_meta
+  ├─ get_state(thread_id)          → error if graph already complete
+  └─ invoke(None, thread_id)       → continue from last checkpoint → _finish_run()
 ```
 
 **Approved repos:** `gin-gonic/gin`, `spf13/cobra`, `go-playground/validator`, `golangci/golangci-lint`
 
-**Test suite:** 203 tests, `pytest -q && ruff check src tests`
+**Test suite:** 213 tests, `pytest -q && ruff check src tests`
 
 ---
 
@@ -83,6 +94,7 @@ All artifacts live under `artifacts/{run_id}/`:
 | File | Introduced by | Contents |
 |------|---------------|----------|
 | `run.log` | Backlog #3 | Structured run log with `run_id` in every line |
+| `run_meta.json` | Backlog #25 | Repo, issue, CLI flags, paths for `go-agent resume` |
 | `repo_meta.json` | Backlog #4 | repo, remote HEAD SHA, cache hit, paths |
 | `repo_map.json` | Backlog #11 | File tree, go.mod module path, top-level packages |
 | `issue_context.json` | Backlog #7 | Full `IssueContext` (title, body, labels, state, comments) |
@@ -108,6 +120,8 @@ Workspace clone: `workspaces/{run_id}/repo`
 
 Shared cache: `workspaces/_cache/{owner__repo}/` (shallow clone + `meta.json` + optional `rag_index/{sha}/`)
 
+Shared checkpoints: `artifacts/checkpoints/checkpoints.db` (LangGraph SqliteSaver; one thread per run UUID)
+
 ---
 
 ## Source file map
@@ -118,6 +132,7 @@ Shared cache: `workspaces/_cache/{owner__repo}/` (shallow clone + `meta.json` + 
 | `constants.py` | Approved repo allowlist |
 | `config.py` | Pydantic settings from env / `.env` |
 | `run_context.py` | Per-run UUID, artifact and workspace paths |
+| `run_meta.py` | Persisted run metadata for `go-agent resume` |
 | `logging_config.py` | Console + file logging with run_id adapter |
 | `workspace.py` | Shallow clone with shared cache |
 | `git_util.py` | Shared `run_git()` subprocess helper |
@@ -135,6 +150,7 @@ Shared cache: `workspaces/_cache/{owner__repo}/` (shallow clone + `meta.json` + 
 | `lint_runner.py` | Subprocess lint/vet runner; writes `lint_result.json` with file:line findings |
 | `fixer.py` | Fix agent; corrective patches from test/lint failures; writes `fix_meta.json` |
 | `orchestrator/` | LangGraph graph; wired plan/code/integrate/test/lint/fix nodes + stub review/pr |
+| `orchestrator/checkpointer.py` | SqliteSaver checkpoint DB and invoke config helpers |
 | `orchestrator/runtime.py` | Reconstruct RunContext and Pydantic models from AgentState |
 | `context_builder.py` | Code graph, ranked context bundle, scope enrichment |
 | `pr_writer.py` | PR draft template + optional LLM; writes `PR.md` |
@@ -1423,7 +1439,6 @@ pytest -q && ruff check src tests
 #### Out of scope
 
 - Real review agent + review→fix loop (Backlog #28)
-- LangGraph checkpointer / resume (Backlog #25)
 
 #### Verification
 
@@ -1489,12 +1504,85 @@ pytest -q && ruff check src tests
 #### Out of scope
 
 - Real review agent (Backlog #28)
-- LangGraph checkpointer (Backlog #25)
 
 #### Verification
 
 ```bash
 pytest tests/test_fixer.py tests/test_orchestrator.py tests/test_patches.py -q
+pytest -q && ruff check src tests
+```
+
+---
+
+### Backlog #25 — LangGraph checkpointer (run resume)
+
+**GitHub:** [#26](https://github.com/DarshanCode2005/Go-PR-Bot/issues/26)  
+**Commit:** (pending) `feat(checkpoint): SqliteSaver and go-agent resume (fixes #26)`  
+**PR:** (pending)
+
+#### What was built
+
+**`orchestrator/checkpointer.py`**
+
+- `checkpoints_db_path()`, `create_checkpointer()` / `get_checkpointer()` — persistent SqliteSaver at `artifacts/checkpoints/checkpoints.db`
+- Long-lived SQLite connection (`check_same_thread=False`) for cross-invocation resume
+- `graph_invoke_config(run_id)`, `get_graph_state()`, `is_run_complete()`
+
+**`run_meta.py`**
+
+- `RunMeta` Pydantic model: repo, issue, CLI flags, artifact/workspace paths, graph mode flags
+- `write_run_meta()`, `load_run_meta()`, `resolve_run_context()`
+- `load_issue_context()`, `load_branch_info()`, `load_scope_bundle()` from artifact JSON (no GitHub re-fetch on resume)
+
+**`orchestrator/graph.py`**
+
+- `compile_graph(..., checkpointer=...)` passes checkpointer to `build_graph().compile()`
+
+**`cli.py`**
+
+- `run`: writes `run_meta.json` after branch setup; compiles with checkpointer; logs resume hint
+- Shared helpers: `_build_initial_graph_state()`, `_invoke_graph()`, `_finish_run()`, `_handle_graph_exception()`
+- New `resume --run-id` command: reload metadata, verify workspace, continue with `invoke(None, thread_id)`
+
+#### Key decisions
+
+- Shared checkpoint DB with `thread_id` = run UUID (not one DB per run)
+- Resume skips CLI setup (clone, scope, branch); relies on artifacts + workspace on disk
+- `--patch-file` runs cannot be resumed (exit 2)
+- Already-complete runs exit 2 with last node logged
+
+#### Tests
+
+- `tests/test_checkpointer.py` — DB path, SqliteSaver setup, interrupt/resume graph integration
+- `tests/test_cli_resume.py` — help, unknown run_id, already complete, happy-path resume
+- `tests/test_cli.py` — `--help` lists `resume`
+- `tests/helpers.py` — `list_run_artifact_dirs()` excludes shared `checkpoints/` dir
+
+#### CLI / pipeline integration
+
+- Every `go-agent run` checkpoints after each graph node
+- `go-agent resume --run-id <uuid>` appends to `run.log` and runs `_finish_run()` on success
+
+#### Artifacts added/changed
+
+- `artifacts/{run_id}/run_meta.json`
+- `artifacts/checkpoints/checkpoints.db` (shared)
+
+#### Dependencies on prior issues
+
+- Backlog #21 — wired LangGraph nodes invoked by CLI
+- Backlog #24 — closed-loop graph is default resume target
+
+#### Out of scope
+
+- Async checkpointer / `AsyncSqliteSaver`
+- Resume from arbitrary historical `checkpoint_id` (latest checkpoint only)
+- Re-running clone/scope/branch setup on resume
+
+#### Verification
+
+```bash
+pytest tests/test_checkpointer.py tests/test_cli_resume.py tests/test_cli.py tests/test_orchestrator.py -q
 pytest -q && ruff check src tests
 ```
 
@@ -1550,6 +1638,8 @@ pytest -q && ruff check src tests
 
 ## Quick reference: CLI flags
 
+### `go-agent run`
+
 | Flag | Default | Purpose |
 |------|---------|---------|
 | `--repo` | required | `owner/name`, must be allowlisted |
@@ -1560,6 +1650,14 @@ pytest -q && ruff check src tests
 | `--patch-file` | None | Dev: apply unified diff and commit |
 | `--force` | false | Proceed on closed issues |
 | `--rag` | false | Enable semantic RAG retrieval (`pip install -e ".[rag]"`) |
+
+### `go-agent resume`
+
+| Flag | Default | Purpose |
+|------|---------|---------|
+| `--run-id` | required | Run UUID from a prior `go-agent run` |
+| `--dry-run` / `--no-dry-run` | from `run_meta.json` | Override dry-run flag stored at run start |
+| `--create-pr` / `--no-create-pr` | from `run_meta.json` | Override create-pr flag stored at run start |
 
 ---
 
@@ -1583,4 +1681,4 @@ See `.env.example` and `config.py`. Minimum for current pipeline:
 
 ---
 
-*Last updated: after Backlog #24 (GitHub #25) — fix agent closed loop.*
+*Last updated: after Backlog #25 (GitHub #26) — LangGraph checkpointer and `go-agent resume`.*
