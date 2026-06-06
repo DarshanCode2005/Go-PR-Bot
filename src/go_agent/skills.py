@@ -16,6 +16,33 @@ _BASH_BLOCK = re.compile(r"```bash\s*\n(.*?)```", re.DOTALL | re.IGNORECASE)
 _GO_TEST_LINE = re.compile(r"^\s*(go test\s+.+)$", re.MULTILINE)
 
 
+def _split_inline_bracket_list(inline: str) -> list[str]:
+    """Split a YAML-style `[a, b]` list, respecting quoted strings."""
+    inner = inline[1:-1]
+    items: list[str] = []
+    current: list[str] = []
+    quote: str | None = None
+    for ch in inner:
+        if quote:
+            current.append(ch)
+            if ch == quote:
+                quote = None
+        elif ch in "'\"":
+            quote = ch
+            current.append(ch)
+        elif ch == ",":
+            item = "".join(current).strip().strip("\"'")
+            if item:
+                items.append(item)
+            current = []
+        else:
+            current.append(ch)
+    item = "".join(current).strip().strip("\"'")
+    if item:
+        items.append(item)
+    return items
+
+
 def load_skill_text(repo: str) -> str:
     """Load repo skill markdown, falling back to skills/_default/SKILL.md."""
     repo_skill = _SKILLS_ROOT / repo_slug(repo) / "SKILL.md"
@@ -41,12 +68,7 @@ def _parse_frontmatter_test_commands(skill_text: str) -> list[str] | None:
             in_test_commands = True
             inline = stripped.split(":", 1)[1].strip()
             if inline and inline.startswith("["):
-                inner = inline.strip("[]")
-                commands.extend(
-                    item.strip().strip("\"'")
-                    for item in inner.split(",")
-                    if item.strip().strip("\"'")
-                )
+                commands.extend(_split_inline_bracket_list(inline))
             elif inline:
                 commands.append(inline.strip("\"'"))
             continue

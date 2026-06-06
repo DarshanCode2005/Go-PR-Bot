@@ -69,6 +69,15 @@ test_commands: [go test ./... -count=1, go test ./pkg/... -count=1]
     assert commands == ["go test ./... -count=1", "go test ./pkg/... -count=1"]
 
 
+def test_parse_skill_test_commands_inline_bracket_list_with_internal_comma():
+    skill = """---
+test_commands: ["go test -run TestFoo,TestBar ./... -count=1"]
+---
+"""
+    commands = parse_skill_test_commands(skill)
+    assert commands == ["go test -run TestFoo,TestBar ./... -count=1"]
+
+
 def test_run_test_commands_success(tmp_path):
     repo_path = tmp_path / "repo"
     repo_path.mkdir()
