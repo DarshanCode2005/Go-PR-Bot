@@ -47,18 +47,21 @@ class FixError(RuntimeError):
 class FixContext(BaseModel):
     iteration: int
     max_iterations: int
-    failure_source: Literal["test", "lint"]
+    failure_source: Literal["test", "lint", "review"]
     test_output: str = ""
     lint_output: str = ""
     lint_findings: list[dict[str, Any]] = Field(default_factory=list)
+    review_comments: list[str] = Field(default_factory=list)
+    review_round: int = 0
 
 
 class FixMeta(BaseModel):
     iteration: int
     max_iterations: int
-    failure_source: Literal["test", "lint"]
+    failure_source: Literal["test", "lint", "review"]
     error_summary: str
     files: list[str] = Field(default_factory=list)
+    review_round: int | None = None
 
 
 def build_failure_context(
@@ -81,11 +84,35 @@ def build_failure_context(
     )
 
 
+def build_review_fix_context(
+    state: dict[str, Any],
+    *,
+    max_review_rounds: int,
+    max_iterations: int,
+) -> FixContext:
+    """Build fix context from reviewer request_changes feedback."""
+    review = state.get("review") or {}
+    comments = [str(item) for item in (review.get("comments") or []) if str(item).strip()]
+    review_round = state.get("review_round", 0) + 1
+    return FixContext(
+        iteration=state.get("iteration", 0) + 1,
+        max_iterations=max_iterations,
+        failure_source="review",
+        review_comments=comments,
+        review_round=review_round,
+    )
+
+
 def _failure_summary(fix_context: FixContext) -> str:
     parts: list[str] = [
         f"Failure source: {fix_context.failure_source}",
         f"Fix iteration: {fix_context.iteration}/{fix_context.max_iterations}",
     ]
+    if fix_context.failure_source == "review":
+        parts.append(f"Review round: {fix_context.review_round}")
+        if fix_context.review_comments:
+            parts.append("Review feedback:\n" + "\n".join(f"- {item}" for item in fix_context.review_comments))
+        return "\n\n".join(parts)
     if fix_context.failure_source == "test" and fix_context.test_output:
         parts.append(f"Test output:\n{fix_context.test_output}")
     if fix_context.lint_output:
@@ -265,5 +292,6 @@ __all__ = [
     "FixMeta",
     "build_corrective_patch",
     "build_failure_context",
+    "build_review_fix_context",
     "write_fix_meta",
 ]

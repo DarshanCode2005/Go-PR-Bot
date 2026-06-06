@@ -41,7 +41,7 @@ go-agent resume --run-id <run_id>
 
 ## Review output
 
-After test/lint pass, the review agent writes `artifacts/{run_id}/review.json` with a structured `decision` (`approve`, `request_changes`, or `reject`), actionable `comments[]`, and a checklist covering issue acceptance criteria, tests, API breaks, style, and error messages. The reviewer receives `gofmt -d` output and vet findings as context and cites concrete file/line issues when present.
+After test/lint pass, the review agent writes `artifacts/{run_id}/review.json` with a structured `decision` (`approve`, `request_changes`, or `reject`), actionable `comments[]`, and a checklist covering issue acceptance criteria, tests, API breaks, style, and error messages. The reviewer receives `gofmt -d` output and vet findings as context and cites concrete file/line issues when present. On `request_changes`, the graph runs one fix/re-test cycle by default (`GO_AGENT_MAX_REVIEW_ROUNDS=1`); a second failure escalates to `status=failed` with the review attached.
 
 ## LLM providers
 

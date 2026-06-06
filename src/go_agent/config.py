@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     artifacts_dir: Path = Path("./artifacts")
     log_level: str = "INFO"
     max_fix_iterations: int = 5
+    max_review_rounds: int = 1
     max_issue_comments: int = 20
     repo_map_max_depth: int = 4
     repo_map_skip_vendor: bool = True

@@ -59,6 +59,7 @@ class AgentState(TypedDict, total=False):
     fix_plan: dict[str, Any]
     status: AgentStatus
     iteration: int
+    review_round: int
     last_node: str
     test_result: dict[str, Any]
     lint_result: dict[str, Any]

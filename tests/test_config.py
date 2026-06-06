@@ -17,6 +17,7 @@ def test_settings_defaults(monkeypatch, tmp_path):
     assert settings.log_level == "INFO"
     assert isinstance(settings.work_dir, type(settings.artifacts_dir))
     assert settings.max_fix_iterations == 5
+    assert settings.max_review_rounds == 1
 
 
 def test_log_level_from_env(monkeypatch, tmp_path):

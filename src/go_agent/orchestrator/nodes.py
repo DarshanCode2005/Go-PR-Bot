@@ -9,6 +9,7 @@ from go_agent.config import get_settings
 from go_agent.fixer import (
     build_corrective_patch,
     build_failure_context,
+    build_review_fix_context,
     write_fix_meta,
 )
 from go_agent.fixer import FixMeta
@@ -231,13 +232,26 @@ def fix_node(state: AgentState) -> AgentState:
     plan = plan_from_state(state)
     bundle = bundle_from_state(state)
 
-    fix_context = build_failure_context(state, max_iterations=settings.max_fix_iterations)
-    logger.info(
-        "Fix iteration %d/%d (source=%s)",
-        fix_context.iteration,
-        fix_context.max_iterations,
-        fix_context.failure_source,
-    )
+    review = state.get("review") or {}
+    if review.get("decision") == "request_changes" and state.get("last_node") == "review":
+        fix_context = build_review_fix_context(
+            state,
+            max_review_rounds=settings.max_review_rounds,
+            max_iterations=settings.max_fix_iterations,
+        )
+        logger.info(
+            "Review fix round %d/%d",
+            fix_context.review_round,
+            settings.max_review_rounds,
+        )
+    else:
+        fix_context = build_failure_context(state, max_iterations=settings.max_fix_iterations)
+        logger.info(
+            "Fix iteration %d/%d (source=%s)",
+            fix_context.iteration,
+            fix_context.max_iterations,
+            fix_context.failure_source,
+        )
 
     artifact = build_corrective_patch(
         repo_path,
@@ -249,25 +263,31 @@ def fix_node(state: AgentState) -> AgentState:
         logger=logger,
     )
     write_coder_artifact(ctx, artifact)
+    if fix_context.failure_source == "test":
+        error_summary = fix_context.test_output[:500]
+    elif fix_context.failure_source == "review":
+        error_summary = "\n".join(fix_context.review_comments)[:500]
+    else:
+        error_summary = fix_context.lint_output[:500]
     write_fix_meta(
         ctx,
         FixMeta(
             iteration=fix_context.iteration,
             max_iterations=fix_context.max_iterations,
             failure_source=fix_context.failure_source,
-            error_summary=(
-                fix_context.test_output[:500]
-                if fix_context.failure_source == "test"
-                else fix_context.lint_output[:500]
-            ),
+            error_summary=error_summary,
             files=[item.path for item in artifact.files],
+            review_round=fix_context.review_round or None,
         ),
     )
-    return {
+    result: AgentState = {
         "status": "fixing",
         "last_node": "fix",
         "iteration": fix_context.iteration,
     }
+    if fix_context.failure_source == "review":
+        result["review_round"] = fix_context.review_round
+    return result
 
 
 def review_node(state: AgentState) -> AgentState:
@@ -325,7 +345,15 @@ def review_node(state: AgentState) -> AgentState:
         except ReviewError as exc:
             logger.error("Reviewer failed: %s", exc)
             raise
-        failed = review.decision != "approve"
+        review_round = state.get("review_round", 0)
+        if review.decision == "approve":
+            failed = False
+        elif review.decision == "reject":
+            failed = True
+        elif review.decision == "request_changes":
+            failed = review_round >= settings.max_review_rounds
+        else:
+            failed = True
         return _finish_review(review, failed=failed)
 
     if iteration >= cap:

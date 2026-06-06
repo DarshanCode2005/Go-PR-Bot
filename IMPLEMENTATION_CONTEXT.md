@@ -35,12 +35,13 @@ Step-by-step record of what was built for each backlog item in [Go-PR-Bot](https
 | #25 LangGraph checkpointer | [#26](https://github.com/DarshanCode2005/Go-PR-Bot/issues/26) | Done |
 | #26 Review agent | [#27](https://github.com/DarshanCode2005/Go-PR-Bot/issues/27) | Done |
 | #27 Review format/lint context | [#28](https://github.com/DarshanCode2005/Go-PR-Bot/issues/28) | Done |
+| #28 Review fix loop | [#29](https://github.com/DarshanCode2005/Go-PR-Bot/issues/29) | Done |
 
 ---
 
 ## Current pipeline state
 
-`go-agent run` performs CLI setup (clone through context bundle and branch), writes `run_meta.json`, then invokes the LangGraph **closed-loop graph** with a SqliteSaver checkpointer (`thread_id` = run UUID). Checkpoints are written after each node. On test/lint failure, routes to `fix → code → integrate` until pass or `max_fix_iterations` (default 5). Use `go-agent resume --run-id <uuid>` to continue from the last checkpoint if a run is interrupted.
+`go-agent run` performs CLI setup (clone through context bundle and branch), writes `run_meta.json`, then invokes the LangGraph **closed-loop graph** with a SqliteSaver checkpointer (`thread_id` = run UUID). Checkpoints are written after each node. On test/lint failure, routes to `fix → code → integrate` until pass or `max_fix_iterations` (default 5). On review `request_changes`, routes through one fix/re-test cycle (default `max_review_rounds=1`) before escalating to `failed`. Use `go-agent resume --run-id <uuid>` to continue from the last checkpoint if a run is interrupted.
 
 ```
 go-agent run --repo <owner/name> --issue <N>
@@ -67,6 +68,7 @@ go-agent run --repo <owner/name> --issue <N>
   │     lint_node → run_lints + lint_result.json (when tests pass)
   │     fix_node → build_corrective_patch + fix_meta.json (on test/lint fail)
   │     review_node → build_review + review.json (gofmt -d + vet context)
+  │     [request_changes + rounds left] → fix → code → integrate → test → lint → review
   │     pr_node → final status done or failed
   ├─ build_pr_draft() + write_pr_md()    → PR.md
   ├─ [optional] maybe_create_pr()        → --no-dry-run --create-pr only
@@ -85,7 +87,7 @@ go-agent resume --run-id <uuid>
 
 **Approved repos:** `gin-gonic/gin`, `spf13/cobra`, `go-playground/validator`, `golangci/golangci-lint`
 
-**Test suite:** 226 tests, `pytest -q && ruff check src tests`
+**Test suite:** 236 tests, `pytest -q && ruff check src tests`
 
 ---
 
@@ -245,6 +247,7 @@ ruff check src tests
 | `artifacts_dir` | `GO_AGENT_ARTIFACTS_DIR` | `./artifacts` |
 | `log_level` | `GO_AGENT_LOG_LEVEL` | `INFO` |
 | `max_fix_iterations` | `GO_AGENT_MAX_FIX_ITERATIONS` | `5` |
+| `max_review_rounds` | `GO_AGENT_MAX_REVIEW_ROUNDS` | `1` |
 | `max_issue_comments` | `GO_AGENT_MAX_ISSUE_COMMENTS` | `20` |
 | `openai_api_key` | `OPENAI_API_KEY` | None |
 | `anthropic_api_key` | `ANTHROPIC_API_KEY` | None |
@@ -1442,7 +1445,7 @@ pytest -q && ruff check src tests
 
 #### Out of scope
 
-- Real review agent + review→fix loop (Backlog #28)
+- Real review agent + review→fix loop (Backlog #28) — implemented in Backlog #26–#28
 
 #### Verification
 
@@ -1507,7 +1510,7 @@ pytest -q && ruff check src tests
 
 #### Out of scope
 
-- Real review agent (Backlog #28)
+- Real review agent (Backlog #28) — implemented in Backlog #26–#28
 
 #### Verification
 
@@ -1630,7 +1633,7 @@ pytest -q && ruff check src tests
 
 #### Out of scope
 
-- Review → fix routing loop (Backlog #28)
+- (none)
 
 #### Verification
 
@@ -1669,6 +1672,57 @@ pytest -q && ruff check src tests
 
 ```bash
 pytest tests/test_reviewer.py -q
+pytest -q && ruff check src tests
+```
+
+---
+
+### Backlog #28 — Review fix loop
+
+**GitHub:** [#29](https://github.com/DarshanCode2005/Go-PR-Bot/issues/29)  
+**Commit:** (pending) `feat(review): review request_changes fix loop (fixes #29)`  
+**PR:** (pending)
+
+#### What was built
+
+**`config.py`**
+
+- `max_review_rounds` (default 1, `GO_AGENT_MAX_REVIEW_ROUNDS`)
+
+**`orchestrator/graph.py`**
+
+- `route_after_review()` — `approve` → `pr`; `request_changes` + rounds left → `fix`; else → `pr` (failed)
+- Conditional edge replaces fixed `review → pr`
+
+**`orchestrator/nodes.py`**
+
+- `review_node`: `request_changes` with rounds remaining stays `status=reviewing` (routes to fix)
+- `fix_node`: review-driven path via `build_review_fix_context()`; increments `review_round`
+
+**`fixer.py`**
+
+- `failure_source=review`; `build_review_fix_context()`; review comments in fix prompt
+
+**`orchestrator/state.py`**
+
+- `review_round` channel
+
+#### Key decisions
+
+- Separate `review_round` counter from test/lint `iteration`
+- `reject` always escalates immediately (no fix cycle)
+- Second `request_changes` after max rounds → `status=failed` with `review.json` preserved
+
+#### Tests
+
+- `tests/test_orchestrator.py` — `route_after_review`, fix loop approve path, escalation path
+- `tests/test_fixer.py` — `build_review_fix_context`, review failure summary
+- `tests/test_reviewer.py` — retry vs exhausted `request_changes`
+
+#### Verification
+
+```bash
+pytest tests/test_orchestrator.py tests/test_fixer.py tests/test_reviewer.py -q
 pytest -q && ruff check src tests
 ```
 
@@ -1764,7 +1818,8 @@ See `.env.example` and `config.py`. Minimum for current pipeline:
 | `GO_AGENT_LLM_RETRY_BASE_DELAY` | Optional | Base delay seconds for LLM retry backoff |
 | `GO_AGENT_TEST_TIMEOUT` | Optional | Subprocess test command timeout seconds (default 300) |
 | `GO_AGENT_LINT_TIMEOUT` | Optional | Subprocess lint command timeout seconds (default 120) |
+| `GO_AGENT_MAX_REVIEW_ROUNDS` | Optional | Review `request_changes` fix cycles before failed (default 1) |
 
 ---
 
-*Last updated: after Backlog #27 (GitHub #28) — review agent with gofmt/vet context.*
+*Last updated: after Backlog #28 (GitHub #29) — review request_changes fix loop.*

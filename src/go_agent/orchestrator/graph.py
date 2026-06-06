@@ -53,10 +53,22 @@ def route_after_lint(state: AgentState, max_fix_iterations: int) -> str:
     return "review"
 
 
+def route_after_review(state: AgentState, max_review_rounds: int) -> str:
+    """Route from review to pr (approve / reject / exhausted) or fix (retry)."""
+    review = state.get("review") or {}
+    decision = review.get("decision")
+    if decision == "approve":
+        return "pr"
+    if decision == "request_changes" and state.get("review_round", 0) < max_review_rounds:
+        return "fix"
+    return "pr"
+
+
 def _add_closed_loop_tail(
     graph: StateGraph,
     *,
     max_fix_iterations: int,
+    max_review_rounds: int,
 ) -> None:
     graph.add_conditional_edges(
         "test",
@@ -69,7 +81,11 @@ def _add_closed_loop_tail(
         {"fix": "fix", "review": "review"},
     )
     graph.add_edge("fix", "code")
-    graph.add_edge("review", "pr")
+    graph.add_conditional_edges(
+        "review",
+        lambda state: route_after_review(state, max_review_rounds),
+        {"fix": "fix", "pr": "pr"},
+    )
     graph.add_edge("pr", END)
 
 
@@ -94,11 +110,15 @@ def build_graph(
     include_closed_loop: bool | None = None,
     implement_only: bool | None = None,
     max_fix_iterations: int | None = None,
+    max_review_rounds: int | None = None,
     settings: Settings | None = None,
 ) -> StateGraph:
     """Build the orchestrator StateGraph (not yet compiled)."""
     settings = settings or get_settings()
     cap = max_fix_iterations if max_fix_iterations is not None else settings.max_fix_iterations
+    review_cap = (
+        max_review_rounds if max_review_rounds is not None else settings.max_review_rounds
+    )
     test_enabled, closed_loop = _resolve_graph_mode(
         include_test=include_test,
         include_closed_loop=include_closed_loop,
@@ -122,7 +142,11 @@ def build_graph(
 
     if closed_loop:
         graph.add_edge("integrate", "test")
-        _add_closed_loop_tail(graph, max_fix_iterations=cap)
+        _add_closed_loop_tail(
+            graph,
+            max_fix_iterations=cap,
+            max_review_rounds=review_cap,
+        )
     elif test_enabled:
         graph.add_edge("integrate", "test")
         graph.add_conditional_edges(
@@ -143,6 +167,7 @@ def compile_graph(
     include_closed_loop: bool | None = None,
     implement_only: bool | None = None,
     max_fix_iterations: int | None = None,
+    max_review_rounds: int | None = None,
     settings: Settings | None = None,
     checkpointer=None,
 ):
@@ -152,5 +177,6 @@ def compile_graph(
         include_closed_loop=include_closed_loop,
         implement_only=implement_only,
         max_fix_iterations=max_fix_iterations,
+        max_review_rounds=max_review_rounds,
         settings=settings,
     ).compile(checkpointer=checkpointer)

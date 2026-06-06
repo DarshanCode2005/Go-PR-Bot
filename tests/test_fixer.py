@@ -10,6 +10,7 @@ from go_agent.fixer import (
     FixMeta,
     build_corrective_patch,
     build_failure_context,
+    build_review_fix_context,
     write_fix_meta,
 )
 from go_agent.planner import FixPlan
@@ -81,6 +82,39 @@ def test_build_failure_context_from_lint_state():
     assert ctx.iteration == 1
     assert ctx.failure_source == "lint"
     assert ctx.lint_findings[0]["file"] == "main.go"
+
+
+def test_build_review_fix_context_from_review_state():
+    ctx = build_review_fix_context(
+        {
+            "review": {
+                "decision": "request_changes",
+                "comments": ["Fix error message in foo.go:12"],
+            },
+            "iteration": 0,
+            "review_round": 0,
+        },
+        max_review_rounds=1,
+        max_iterations=5,
+    )
+    assert ctx.failure_source == "review"
+    assert ctx.review_round == 1
+    assert "foo.go" in ctx.review_comments[0]
+
+
+def test_failure_summary_includes_review_feedback():
+    from go_agent.fixer import _failure_summary
+
+    ctx = FixContext(
+        iteration=1,
+        max_iterations=5,
+        failure_source="review",
+        review_comments=["Fix foo.go:12 formatting"],
+        review_round=1,
+    )
+    summary = _failure_summary(ctx)
+    assert "Review feedback" in summary
+    assert "foo.go:12" in summary
 
 
 def test_build_corrective_patch_with_mock_llm(tmp_path, monkeypatch):
