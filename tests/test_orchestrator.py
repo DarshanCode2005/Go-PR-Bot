@@ -97,8 +97,18 @@ def test_invoke_max_iterations_marks_failed():
     assert result["iteration"] == 1
 
 
+def _langgraph_architecture_section(text: str) -> str:
+    marker = "## LangGraph orchestrator (code)"
+    assert marker in text, "ARCHITECTURE.md must document the LangGraph orchestrator"
+    return text.split(marker, 1)[1].split("\n---", 1)[0]
+
+
 def test_architecture_lists_graph_nodes():
     assert _ARCHITECTURE.is_file(), "docs/ARCHITECTURE.md must exist"
-    text = _ARCHITECTURE.read_text(encoding="utf-8")
-    for name in GRAPH_NODE_NAMES:
-        assert name in text, f"ARCHITECTURE.md must mention node {name!r}"
+    section = _langgraph_architecture_section(_ARCHITECTURE.read_text(encoding="utf-8"))
+
+    stub_nodes = ", ".join(f"`{name}`" for name in GRAPH_NODE_NAMES)
+    assert stub_nodes in section, "LangGraph section must list stub nodes in code order"
+
+    for edge in ("plan --> code", "code --> test", "fix --> code", "review --> pr"):
+        assert edge in section, f"LangGraph mermaid must include edge {edge!r}"
