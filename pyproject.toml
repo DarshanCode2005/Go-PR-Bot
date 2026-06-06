@@ -10,6 +10,7 @@ dependencies = [
     "pydantic-settings>=2.3",
     "litellm>=1.40",
     "langgraph>=0.2",
+    "langgraph-checkpoint-sqlite>=2.0",
     "langchain-core>=0.3",
     "pygithub>=2.3",
     "gitpython>=3.1",

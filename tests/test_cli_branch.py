@@ -7,7 +7,7 @@ from go_agent.cli import app
 from go_agent.config import clear_settings_cache
 from go_agent.github_issues import IssueContext
 from go_agent.llm_client import set_completion_transport
-from helpers import enable_planner_mock
+from helpers import enable_planner_mock, list_run_artifact_dirs
 
 runner = CliRunner()
 
@@ -40,7 +40,7 @@ def test_run_writes_branch_meta(tmp_path, monkeypatch, bare_repo_url: str):
             )
 
     assert result.exit_code == 0
-    artifact_dirs = [p for p in (tmp_path / "artifacts").iterdir() if p.is_dir()]
+    artifact_dirs = list_run_artifact_dirs(tmp_path / "artifacts")
     assert len(artifact_dirs) == 1
     branch_meta = artifact_dirs[0] / "branch_meta.json"
     assert branch_meta.exists()

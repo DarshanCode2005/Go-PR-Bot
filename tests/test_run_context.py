@@ -7,7 +7,7 @@ from typer.testing import CliRunner
 
 from go_agent.cli import app
 from go_agent.github_issues import IssueContext
-from helpers import enable_planner_mock
+from helpers import enable_planner_mock, list_run_artifact_dirs
 from go_agent.config import Settings, clear_settings_cache
 from go_agent.logging_config import configure_run_logging
 from go_agent.run_context import create_run_context
@@ -79,7 +79,7 @@ def test_cli_run_creates_artifact_dir(tmp_path, monkeypatch, bare_repo_url: str)
             result = runner.invoke(app, ["run", "--repo", "gin-gonic/gin", "--issue", "1"])
     assert result.exit_code == 0
 
-    subdirs = [p for p in artifacts.iterdir() if p.is_dir()]
+    subdirs = list_run_artifact_dirs(artifacts)
     assert len(subdirs) == 1
     run_log = subdirs[0] / "run.log"
     assert run_log.exists()

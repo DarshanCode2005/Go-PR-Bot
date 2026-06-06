@@ -22,6 +22,23 @@ go-agent run --repo gin-gonic/gin --issue 1234 --dry-run
 go-agent run --repo spf13/cobra --issue 567 --create-pr
 ```
 
+## Resume interrupted runs
+
+Each `go-agent run` persists LangGraph checkpoints to a shared SQLite database and writes `run_meta.json` under the run artifact directory. If a run is interrupted (crash, kill, network error), resume from the last checkpointed node:
+
+```bash
+go-agent run --repo gin-gonic/gin --issue 1234 --dry-run
+# note run_id from logs ("Resume later with: ...") or artifacts/{run_id}/
+
+go-agent resume --run-id <run_id>
+```
+
+- **Checkpoint DB:** `{GO_AGENT_ARTIFACTS_DIR}/checkpoints/checkpoints.db` (default `artifacts/checkpoints/checkpoints.db`)
+- **Thread ID:** each run uses its UUID as LangGraph `thread_id`
+- **Requirements:** the original workspace clone (`workspaces/{run_id}/repo`) and artifact directory must still exist
+- **Already complete:** `go-agent resume` exits with code 2 if the graph finished successfully
+- **Overrides:** optional `--dry-run` / `--no-dry-run` and `--create-pr` override values stored in `run_meta.json`
+
 ## LLM providers
 
 LiteLLM is used as a single provider layer. You can configure either OpenAI or Anthropic.

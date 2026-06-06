@@ -17,7 +17,6 @@ from go_agent.coder import (
     combine_file_patches,
     plan_slice_for_file,
     schedule_coder_waves,
-    write_coder_artifact,
 )
 from go_agent.config import Settings
 from go_agent.context_builder import ContextBundle
