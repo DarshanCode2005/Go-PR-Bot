@@ -18,7 +18,7 @@ from go_agent.orchestrator.runtime import (
 from go_agent.orchestrator.state import AgentState, ReviewResult, TestResult
 from go_agent.patches import apply_patch_and_commit
 from go_agent.planner import build_fix_plan, write_plan
-from go_agent.test_runner import combined_output, run_tests, write_test_result
+from go_agent.test_runner import TestRunError, combined_output, run_tests, write_test_result
 
 
 def plan_node(state: AgentState) -> AgentState:
@@ -125,7 +125,12 @@ def test_node(state: AgentState) -> AgentState:
     plan = plan_from_state(state)
     issue = issue_from_state(state)
 
-    result = run_tests(repo_path, plan, issue.repo, settings, logger=logger)
+    try:
+        result = run_tests(repo_path, plan, issue.repo, settings, logger=logger)
+    except TestRunError as exc:
+        if exc.result is not None:
+            write_test_result(ctx, exc.result)
+        raise
     write_test_result(ctx, result)
     output = combined_output(result)
     last_command = result.commands[-1] if result.commands else None

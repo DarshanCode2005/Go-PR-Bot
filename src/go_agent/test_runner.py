@@ -21,6 +21,10 @@ _MAX_OUTPUT_CHARS = 65536
 class TestRunError(RuntimeError):
     """Raised when test execution cannot complete (e.g. timeout)."""
 
+    def __init__(self, message: str, *, result: TestRunResult | None = None) -> None:
+        super().__init__(message)
+        self.result = result
+
 
 class CommandResult(BaseModel):
     command: str
@@ -43,6 +47,14 @@ def _truncate(text: str, limit: int = _MAX_OUTPUT_CHARS) -> str:
     if len(text) <= limit:
         return text
     return text[: limit - 20] + "\n... [truncated]"
+
+
+def _coerce_output(data: str | bytes | None) -> str:
+    if not data:
+        return ""
+    if isinstance(data, bytes):
+        return data.decode("utf-8", errors="replace")
+    return data
 
 
 def run_test_commands(
@@ -74,8 +86,25 @@ def run_test_commands(
             )
         except subprocess.TimeoutExpired as exc:
             duration = time.monotonic() - started
+            results.append(CommandResult(
+                command=command,
+                exit_code=-1,
+                passed=False,
+                stdout=_truncate(_coerce_output(exc.stdout)),
+                stderr=_truncate(_coerce_output(exc.stderr)),
+                duration_seconds=round(duration, 3),
+            ))
             msg = f"test command timed out after {timeout}s: {command}"
-            raise TestRunError(msg) from exc
+            raise TestRunError(
+                msg,
+                result=TestRunResult(
+                    passed=False,
+                    commands=results,
+                    resolved_commands=list(commands),
+                    source=source,
+                    plan_commands=list(plan_commands or commands),
+                ),
+            ) from exc
 
         duration = time.monotonic() - started
         cmd_passed = completed.returncode == 0

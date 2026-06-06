@@ -104,9 +104,18 @@ def test_run_test_commands_timeout_raises(tmp_path):
     repo_path.mkdir()
 
     with patch("go_agent.test_runner.subprocess.run") as run_mock:
-        run_mock.side_effect = __import__("subprocess").TimeoutExpired("sleep 1", 1)
-        with pytest.raises(TestRunError, match="timed out"):
+        run_mock.side_effect = __import__("subprocess").TimeoutExpired(
+            "sleep 1", 1, output=b"partial out", stderr=b"partial err"
+        )
+        with pytest.raises(TestRunError, match="timed out") as exc_info:
             run_test_commands(repo_path, ["sleep 999"], timeout=1)
+
+    result = exc_info.value.result
+    assert result is not None
+    assert result.passed is False
+    assert result.commands[0].exit_code == -1
+    assert result.commands[0].stdout == "partial out"
+    assert result.commands[0].stderr == "partial err"
 
 
 def test_write_test_result_artifact(tmp_path, monkeypatch):
