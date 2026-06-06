@@ -18,6 +18,7 @@ from go_agent.orchestrator.runtime import (
 from go_agent.orchestrator.state import AgentState, ReviewResult, TestResult
 from go_agent.patches import apply_patch_and_commit
 from go_agent.planner import build_fix_plan, write_plan
+from go_agent.test_runner import TestRunError, combined_output, run_tests, write_test_result
 
 
 def plan_node(state: AgentState) -> AgentState:
@@ -117,11 +118,41 @@ def integrate_node(state: AgentState) -> AgentState:
 
 
 def test_node(state: AgentState) -> AgentState:
-    result = TestResult(passed=True, output="stub: tests passed", command="stub")
+    ctx = run_context_from_state(state)
+    settings = get_settings()
+    logger = logger_for_state(state)
+    repo_path = repo_path_from_state(state)
+    plan = plan_from_state(state)
+    issue = issue_from_state(state)
+
+    try:
+        result = run_tests(repo_path, plan, issue.repo, settings, logger=logger)
+    except TestRunError as exc:
+        if exc.result is not None:
+            write_test_result(ctx, exc.result)
+        raise
+    write_test_result(ctx, result)
+    output = combined_output(result)
+    last_command = result.commands[-1] if result.commands else None
+    first_failed = next((c for c in result.commands if not c.passed), None)
+    test_result = TestResult(
+        passed=result.passed,
+        exit_code=first_failed.exit_code if first_failed else (last_command.exit_code if last_command else 0),
+        output=output,
+        command=result.resolved_commands[0] if result.resolved_commands else "",
+        commands=result.resolved_commands,
+        source=result.source,
+    )
+    logger.info(
+        "Tests %s (%d command(s), source=%s)",
+        "passed" if result.passed else "failed",
+        len(result.commands),
+        result.source,
+    )
     return {
         "status": "testing",
         "last_node": "test",
-        "test_result": result.model_dump(),
+        "test_result": test_result.model_dump(),
     }
 
 

@@ -12,8 +12,8 @@ from go_agent.context_builder import ContextBundle
 from go_agent.github_issues import IssueContext
 from go_agent.llm_client import complete, llm_available
 from go_agent.run_context import RunContext
+from go_agent.skills import load_skill_text
 from go_agent.utils import normalize_file_path
-from go_agent.workspace import repo_slug
 
 PLANNER_SYSTEM_PROMPT = """You are a senior Go open-source maintainer planning a minimal fix for a GitHub issue.
 
@@ -30,7 +30,6 @@ Be specific to the issue and supplied code context. Prefer the smallest correct 
 _MAX_ISSUE_BODY_CHARS = 3000
 _MAX_BUNDLE_ENTRY_CHARS = 2000
 _DEFAULT_MAX_CONTEXT_CHARS = 12000
-_SKILLS_ROOT = Path(__file__).resolve().parents[2] / "skills"
 
 
 class PlanError(RuntimeError):
@@ -144,15 +143,6 @@ class FixPlan(BaseModel):
         return self
 
 
-def _load_skill_text(repo: str) -> str:
-    repo_skill = _SKILLS_ROOT / repo_slug(repo) / "SKILL.md"
-    default_skill = _SKILLS_ROOT / "_default" / "SKILL.md"
-    path = repo_skill if repo_skill.is_file() else default_skill
-    if not path.is_file():
-        return ""
-    return path.read_text(encoding="utf-8").strip()
-
-
 def _bundle_excerpt(context_bundle: ContextBundle, *, max_chars: int) -> str:
     parts: list[str] = []
     used = 0
@@ -178,7 +168,7 @@ def build_planner_messages(
     correction: str | None = None,
 ) -> list[dict[str, str]]:
     """Build system + user messages for the planner LLM call."""
-    skill_text = _load_skill_text(issue.repo)
+    skill_text = load_skill_text(issue.repo)
     hints_text = ", ".join(scope_hints[:30]) or "(none)"
     bundle_text = _bundle_excerpt(context_bundle, max_chars=max_context_chars)
     body = issue.body[:_MAX_ISSUE_BODY_CHARS].strip()

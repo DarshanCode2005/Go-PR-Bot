@@ -48,6 +48,7 @@ class Settings(BaseSettings):
     coder_max_file_chars: int = 60000
     coder_max_workers: int = 4
     integrator_max_merge_retries: int = 1
+    test_timeout: int = 300
 
     openai_api_key: str | None = Field(default=None, validation_alias="OPENAI_API_KEY")
     anthropic_api_key: str | None = Field(default=None, validation_alias="ANTHROPIC_API_KEY")

@@ -29,12 +29,13 @@ Step-by-step record of what was built for each backlog item in [Go-PR-Bot](https
 | #19 Integrator | [#20](https://github.com/DarshanCode2005/Go-PR-Bot/issues/20) | Done |
 | #20 LangGraph skeleton | [#21](https://github.com/DarshanCode2005/Go-PR-Bot/issues/21) | Done |
 | #21 Wire Epic 4 nodes | [#22](https://github.com/DarshanCode2005/Go-PR-Bot/issues/22) | Done |
+| #22 Subprocess test runner | [#23](https://github.com/DarshanCode2005/Go-PR-Bot/issues/23) | Done |
 
 ---
 
 ## Current pipeline state
 
-`go-agent run` performs CLI setup (clone through context bundle and branch), then invokes the LangGraph **implement graph** (`plan → code → integrate → END`). Patches are applied locally on the issue branch; dry-run exits **0** after PR draft. Test/review/pr nodes remain stubbed for later issues.
+`go-agent run` performs CLI setup (clone through context bundle and branch), then invokes the LangGraph **validation graph** (`plan → code → integrate → test → END`). Patches are applied locally; `test_result.json` is written; dry-run exits **0** on pass or **1** on test failure. Fix/review/pr nodes remain stubbed for later issues.
 
 ```
 go-agent run --repo <owner/name> --issue <N>
@@ -52,19 +53,20 @@ go-agent run --repo <owner/name> --issue <N>
   ├─ build_context_bundle()             → code_graph.json + context_bundle.json
   ├─ create_issue_branch()         → agent/issue-{N}-{slug}
   ├─ write_branch_meta()           → branch_meta.json
-  ├─ LangGraph implement graph:
+  ├─ LangGraph validation graph:
   │     plan_node → build_fix_plan + plan.json
   │     code_node → build_proposed_patch + proposed.patch + coder_meta.json
   │     integrate_node → integrate + apply_patch_and_commit → changes.patch
+  │     test_node → run_tests + test_result.json
   ├─ build_pr_draft() + write_pr_md()    → PR.md
   ├─ [optional] maybe_create_pr()        → --no-dry-run --create-pr only
   │     push branch + gh pr create --draft → pr_meta.json, exit 0
-  └─ dry-run exit 0
+  └─ dry-run exit 0 (exit 1 if tests fail)
 ```
 
 **Approved repos:** `gin-gonic/gin`, `spf13/cobra`, `go-playground/validator`, `golangci/golangci-lint`
 
-**Test suite:** 165 tests, `pytest -q && ruff check src tests`
+**Test suite:** 176 tests, `pytest -q && ruff check src tests`
 
 ---
 
@@ -87,6 +89,7 @@ All artifacts live under `artifacts/{run_id}/`:
 | `proposed.patch` | Backlog #17 | Combined unified diff from coder (per-file LLM patches) |
 | `coder_meta.json` | Backlog #17 | Per-file patch metadata, `execution_waves`, combined diff |
 | `integrator_meta.json` | Backlog #19 | Conflict resolutions, `files_touched`, resolved patch |
+| `test_result.json` | Backlog #22 | Subprocess test commands, exit codes, stdout/stderr |
 | `resolved.patch` | Backlog #19 | Unified diff after sequential apply / merge |
 | `branch_meta.json` | Backlog #5 | branch name, base SHA, default branch, issue info |
 | `changes.patch` | Backlog #6 | `git diff` from base SHA (after patch apply) |
@@ -119,7 +122,9 @@ Shared cache: `workspaces/_cache/{owner__repo}/` (shallow clone + `meta.json` + 
 | `planner.py` | Strong-tier planner; Pydantic `FixPlan`; writes `plan.json` |
 | `coder.py` | Fast-tier per-file coder; SEARCH/REPLACE → unified diff; scope guard |
 | `integrator.py` | Sequential patch apply; LLM merge on overlapping hunks |
-| `orchestrator/` | LangGraph graph; wired `plan`/`code`/`integrate` nodes + stub test/fix/review/pr |
+| `skills.py` | Skill loading; repo-specific test command override parsing |
+| `test_runner.py` | Subprocess test command runner; writes `test_result.json` |
+| `orchestrator/` | LangGraph graph; wired plan/code/integrate/test nodes + stub fix/review/pr |
 | `orchestrator/runtime.py` | Reconstruct RunContext and Pydantic models from AgentState |
 | `context_builder.py` | Code graph, ranked context bundle, scope enrichment |
 | `pr_writer.py` | PR draft template + optional LLM; writes `PR.md` |
@@ -1281,6 +1286,71 @@ pytest -q && ruff check src tests
 
 ```bash
 pytest tests/test_orchestrator.py tests/test_cli.py tests/test_cli_branch.py -q
+pytest -q && ruff check src tests
+```
+
+---
+
+### Backlog #22 — Subprocess test runner
+
+**GitHub:** [#23](https://github.com/DarshanCode2005/Go-PR-Bot/issues/23)  
+**Commit:** (pending) `feat(test): subprocess test runner with skill overrides (fixes #23)`  
+**PR:** (pending)
+
+#### What was built
+
+**`skills.py`**
+
+- `load_skill_text()`, `parse_skill_test_commands()`, `resolve_test_commands()`
+- Repo skill YAML frontmatter or bash-block override; plan commands as fallback
+
+**`test_runner.py`**
+
+- `run_test_commands()`, `run_tests()`, `write_test_result()` → `test_result.json`
+- `CommandResult` / `TestRunResult` Pydantic models; timeout via `TestRunnerError`
+
+**`orchestrator/nodes.py`**
+
+- `test_node` wired to `run_tests` + artifact export
+
+**`orchestrator/graph.py`**
+
+- `VALIDATION_NODE_NAMES`, `include_test` / `include_closed_loop` graph modes
+- CLI default: `integrate → test → END`
+
+**`config.py`**
+
+- `test_timeout` (default 300, `GO_AGENT_TEST_TIMEOUT`)
+
+**`cli.py`**
+
+- `compile_graph(include_test=True)`; exit 1 on test failure
+
+**`skills/gin-gonic__gin/SKILL.md`**
+
+- Frontmatter `test_commands` override for acceptance demo
+
+#### Key decisions
+
+- Skill override applies only from repo-specific skill (not `_default`)
+- Run all commands; pass only if all exit 0
+- PR draft still written before exit 1 on test failure
+
+#### Tests
+
+- `tests/test_test_runner.py` — resolution, subprocess mock, timeout, artifact
+- Updated orchestrator/CLI tests for validation graph and `test_result.json`
+- `enable_agent_mocks()` patches `run_tests` for offline CLI tests
+
+#### Out of scope
+
+- Fix loop on test failure (Backlog #24)
+- Lint/vet runner (Backlog #23 / GitHub #24)
+
+#### Verification
+
+```bash
+pytest tests/test_test_runner.py tests/test_orchestrator.py tests/test_cli.py -q
 pytest -q && ruff check src tests
 ```
 
