@@ -31,12 +31,13 @@ Step-by-step record of what was built for each backlog item in [Go-PR-Bot](https
 | #21 Wire Epic 4 nodes | [#22](https://github.com/DarshanCode2005/Go-PR-Bot/issues/22) | Done |
 | #22 Subprocess test runner | [#23](https://github.com/DarshanCode2005/Go-PR-Bot/issues/23) | Done |
 | #23 Subprocess lint runner | [#24](https://github.com/DarshanCode2005/Go-PR-Bot/issues/24) | Done |
+| #24 Fix agent closed loop | [#25](https://github.com/DarshanCode2005/Go-PR-Bot/issues/25) | Done |
 
 ---
 
 ## Current pipeline state
 
-`go-agent run` performs CLI setup (clone through context bundle and branch), then invokes the LangGraph **validation graph** (`plan → code → integrate → test → lint → END` when tests pass; `test → END` when tests fail). Patches are applied locally; `test_result.json` and `lint_result.json` are written; dry-run exits **0** on pass or **1** on test/lint failure. Fix/review/pr nodes remain stubbed for later issues.
+`go-agent run` performs CLI setup (clone through context bundle and branch), then invokes the LangGraph **closed-loop graph** (`plan → code → integrate → test → lint → review → pr`). On test/lint failure, routes to `fix → code → integrate` until pass or `max_fix_iterations` (default 5). Exits **0** on success or **1** on validation/fix failure or max iterations exceeded.
 
 ```
 go-agent run --repo <owner/name> --issue <N>
@@ -54,21 +55,24 @@ go-agent run --repo <owner/name> --issue <N>
   ├─ build_context_bundle()             → code_graph.json + context_bundle.json
   ├─ create_issue_branch()         → agent/issue-{N}-{slug}
   ├─ write_branch_meta()           → branch_meta.json
-  ├─ LangGraph validation graph:
+  ├─ LangGraph closed-loop graph:
   │     plan_node → build_fix_plan + plan.json
   │     code_node → build_proposed_patch + proposed.patch + coder_meta.json
   │     integrate_node → integrate + apply_patch_and_commit → changes.patch
   │     test_node → run_tests + test_result.json
-  │     lint_node → run_lints + lint_result.json (only when tests pass)
+  │     lint_node → run_lints + lint_result.json (when tests pass)
+  │     fix_node → build_corrective_patch + fix_meta.json (on test/lint fail)
+  │     review_node → stub approve / failed on max iterations
+  │     pr_node → final status done or failed
   ├─ build_pr_draft() + write_pr_md()    → PR.md
   ├─ [optional] maybe_create_pr()        → --no-dry-run --create-pr only
   │     push branch + gh pr create --draft → pr_meta.json, exit 0
-  └─ dry-run exit 0 (exit 1 if tests or lint fail)
+  └─ dry-run exit 0 (exit 1 if validation/fix failed or max iterations exceeded)
 ```
 
 **Approved repos:** `gin-gonic/gin`, `spf13/cobra`, `go-playground/validator`, `golangci/golangci-lint`
 
-**Test suite:** 191 tests, `pytest -q && ruff check src tests`
+**Test suite:** 203 tests, `pytest -q && ruff check src tests`
 
 ---
 
@@ -93,6 +97,7 @@ All artifacts live under `artifacts/{run_id}/`:
 | `integrator_meta.json` | Backlog #19 | Conflict resolutions, `files_touched`, resolved patch |
 | `test_result.json` | Backlog #22 | Subprocess test commands, exit codes, stdout/stderr |
 | `lint_result.json` | Backlog #23 | Subprocess lint commands, exit codes, stdout/stderr, file:line findings |
+| `fix_meta.json` | Backlog #24 | Fix iteration, failure source, error summary, files patched |
 | `resolved.patch` | Backlog #19 | Unified diff after sequential apply / merge |
 | `branch_meta.json` | Backlog #5 | branch name, base SHA, default branch, issue info |
 | `changes.patch` | Backlog #6 | `git diff` from base SHA (after patch apply) |
@@ -128,7 +133,8 @@ Shared cache: `workspaces/_cache/{owner__repo}/` (shallow clone + `meta.json` + 
 | `skills.py` | Skill loading; repo-specific test/lint command override parsing |
 | `test_runner.py` | Subprocess test command runner; writes `test_result.json` |
 | `lint_runner.py` | Subprocess lint/vet runner; writes `lint_result.json` with file:line findings |
-| `orchestrator/` | LangGraph graph; wired plan/code/integrate/test/lint nodes + stub fix/review/pr |
+| `fixer.py` | Fix agent; corrective patches from test/lint failures; writes `fix_meta.json` |
+| `orchestrator/` | LangGraph graph; wired plan/code/integrate/test/lint/fix nodes + stub review/pr |
 | `orchestrator/runtime.py` | Reconstruct RunContext and Pydantic models from AgentState |
 | `context_builder.py` | Code graph, ranked context bundle, scope enrichment |
 | `pr_writer.py` | PR draft template + optional LLM; writes `PR.md` |
@@ -1416,14 +1422,79 @@ pytest -q && ruff check src tests
 
 #### Out of scope
 
-- Fix loop on lint failure (Backlog #24)
-- Closed-loop `lint → fix` routing
-- `gofmt -l` enforcement
+- Real review agent + review→fix loop (Backlog #28)
+- LangGraph checkpointer / resume (Backlog #25)
 
 #### Verification
 
 ```bash
 pytest tests/test_lint_runner.py tests/test_orchestrator.py tests/test_cli.py -q
+pytest -q && ruff check src tests
+```
+
+---
+
+### Backlog #24 — Fix agent and conditional edges
+
+**GitHub:** [#25](https://github.com/DarshanCode2005/Go-PR-Bot/issues/25)  
+**Commit:** (pending) `feat(fix): closed-loop fix agent on test/lint failure (fixes #25)`  
+**PR:** (pending)
+
+#### What was built
+
+**`fixer.py`**
+
+- `build_failure_context()`, `build_corrective_patch()`, `write_fix_meta()` → `fix_meta.json`
+- Reuses coder wave scheduling and LLM patch normalization with test/lint failure context
+
+**`orchestrator/nodes.py`**
+
+- `fix_node` wired to fix agent; logs `Fix iteration N/M (source=...)`
+- `code_node` pass-through on `iteration > 0` (uses fix agent artifact)
+- `integrate_node` uses `integration_base_sha()` (HEAD on fix rounds) and `stack_on_head`
+- `review_node` checks test + lint pass; sets `status=failed` when max iterations exceeded
+- `pr_node` logs final iteration and status
+
+**`orchestrator/graph.py`**
+
+- `route_after_lint()` — lint fail → fix or review (max)
+- Closed loop: test pass → lint; test/lint fail → fix → code → integrate
+
+**`patches.py`**
+
+- `apply_patch_and_commit(..., stack_on_head=True)` for incremental fix commits
+
+**`orchestrator/runtime.py`**
+
+- `integration_base_sha()` — branch base on first pass, HEAD on fix iterations
+
+**`cli.py`**
+
+- Default: `compile_graph(include_test=True, include_closed_loop=True)`
+- Exit 1 on `FixError` or `status=failed` after max iterations
+
+#### Key decisions
+
+- Fix agent reuses coder infrastructure with dedicated fix prompt
+- Max iterations checked before fix routing (`iteration < max_fix_iterations`)
+- Validation-only graph retained for tests (`include_closed_loop=False`)
+
+#### Tests
+
+- `tests/test_fixer.py` — failure context, corrective patch mock, fix_meta artifact
+- Updated orchestrator routing tests for `route_after_lint`
+- `tests/test_patches.py` — `stack_on_head` second commit
+- `enable_agent_mocks()` patches `build_corrective_patch`
+
+#### Out of scope
+
+- Real review agent (Backlog #28)
+- LangGraph checkpointer (Backlog #25)
+
+#### Verification
+
+```bash
+pytest tests/test_fixer.py tests/test_orchestrator.py tests/test_patches.py -q
 pytest -q && ruff check src tests
 ```
 
@@ -1512,4 +1583,4 @@ See `.env.example` and `config.py`. Minimum for current pipeline:
 
 ---
 
-*Last updated: after Backlog #23 (GitHub #24) — subprocess lint/vet runner.*
+*Last updated: after Backlog #24 (GitHub #25) — fix agent closed loop.*

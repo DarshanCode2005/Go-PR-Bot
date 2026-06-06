@@ -76,6 +76,23 @@ def mock_run_lints(*args, **kwargs):
     )
 
 
+def mock_build_corrective_patch(*args, **kwargs):
+    from go_agent.coder import CoderArtifact, FilePatch
+
+    patch = FilePatch(
+        path="README.md",
+        format="search_replace",
+        patch="--- a/README.md\n+++ b/README.md\n",
+    )
+    return CoderArtifact(
+        issue_number=1,
+        repo="gin-gonic/gin",
+        files=[patch],
+        combined_patch=patch.patch,
+        execution_waves=[["README.md"]],
+    )
+
+
 def run_git(args: list[str], *, cwd: Path) -> None:
     subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True)
 
@@ -131,6 +148,10 @@ def enable_agent_mocks(
     monkeypatch.setattr("go_agent.llm_client._TRANSPORT", effective_transport)
     monkeypatch.setattr("go_agent.orchestrator.nodes.run_tests", mock_run_tests)
     monkeypatch.setattr("go_agent.orchestrator.nodes.run_lints", mock_run_lints)
+    monkeypatch.setattr(
+        "go_agent.orchestrator.nodes.build_corrective_patch",
+        mock_build_corrective_patch,
+    )
 
 
 def enable_planner_mock(
