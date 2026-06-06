@@ -13,7 +13,6 @@ AgentStatus = Literal[
     "testing",
     "fixing",
     "reviewing",
-    "shipping",
     "done",
     "failed",
 ]
