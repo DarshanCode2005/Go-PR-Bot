@@ -150,8 +150,9 @@ def run_gofmt_diff(repo_path: Path, files: list[str]) -> str:
             capture_output=True,
             text=True,
             check=False,
+            timeout=30,
         )
-    except FileNotFoundError:
+    except (FileNotFoundError, subprocess.TimeoutExpired):
         return ""
     output = "\n".join(part for part in (completed.stdout, completed.stderr) if part).strip()
     return _truncate(output)
