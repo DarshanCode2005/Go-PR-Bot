@@ -35,10 +35,16 @@ def test_resolve_lint_commands_default_vet_only(tmp_path):
     assert commands == ["go vet ./..."]
 
 
-def test_resolve_lint_commands_includes_golangci_when_config_and_binary(tmp_path):
+@pytest.mark.parametrize(
+    "config_name",
+    (".golangci.yml", ".golangci.yaml", ".golangci.toml", ".golangci.json"),
+)
+def test_resolve_lint_commands_includes_golangci_when_config_and_binary(
+    tmp_path, config_name
+):
     repo_path = tmp_path / "repo"
     repo_path.mkdir()
-    (repo_path / ".golangci.yml").write_text("run:\n  timeout: 5m\n", encoding="utf-8")
+    (repo_path / config_name).write_text("run:\n  timeout: 5m\n", encoding="utf-8")
 
     with patch("go_agent.skills.shutil.which", return_value="/usr/bin/golangci-lint"):
         commands, source = resolve_lint_commands("spf13/cobra", repo_path)

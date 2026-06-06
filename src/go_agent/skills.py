@@ -131,7 +131,10 @@ def parse_skill_lint_commands(skill_text: str) -> list[str] | None:
 def default_lint_commands(repo_path: Path) -> list[str]:
     """Default vet + optional golangci-lint when config and binary are present."""
     commands = ["go vet ./..."]
-    if shutil.which("golangci-lint") and (repo_path / ".golangci.yml").is_file():
+    _golangci_configs = (".golangci.yml", ".golangci.yaml", ".golangci.toml", ".golangci.json")
+    if shutil.which("golangci-lint") and any(
+        (repo_path / name).is_file() for name in _golangci_configs
+    ):
         commands.append("golangci-lint run")
     return commands
 
