@@ -87,9 +87,11 @@ def test_full_graph_edges():
     assert ("code", "integrate") in linear
     assert ("integrate", "test") in linear
     assert ("fix", "code") in linear
+    assert ("lint", "review") in linear
     assert ("review", "pr") in linear
     assert ("pr", "__end__") in linear
     assert ("test", "fix") in conditional
+    assert ("test", "lint") in conditional
     assert ("test", "review") in conditional
 
 
@@ -274,7 +276,7 @@ def test_route_after_test_max_iterations():
 
 def test_route_after_test_pass():
     state = {"test_result": {"passed": True}, "iteration": 0}
-    assert route_after_test(state, max_fix_iterations=5) == "review"
+    assert route_after_test(state, max_fix_iterations=5) == "lint"
 
 
 def _failing_test_node(state: AgentState) -> AgentState:

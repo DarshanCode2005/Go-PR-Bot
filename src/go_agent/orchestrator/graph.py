@@ -32,10 +32,10 @@ def route_after_test_validation(state: AgentState) -> str:
 
 
 def route_after_test(state: AgentState, max_fix_iterations: int) -> str:
-    """Route from test to fix (retry) or review (pass or max iterations)."""
+    """Route from test to lint (pass), fix (retry), or review (max iterations)."""
     test_result = state.get("test_result") or {}
     if test_result.get("passed"):
-        return "review"
+        return "lint"
     iteration = state.get("iteration", 0)
     if iteration < max_fix_iterations:
         return "fix"
@@ -50,9 +50,10 @@ def _add_closed_loop_tail(
     graph.add_conditional_edges(
         "test",
         lambda state: route_after_test(state, max_fix_iterations),
-        {"fix": "fix", "review": "review"},
+        {"fix": "fix", "lint": "lint", "review": "review"},
     )
     graph.add_edge("fix", "code")
+    graph.add_edge("lint", "review")
     graph.add_edge("review", "pr")
     graph.add_edge("pr", END)
 
