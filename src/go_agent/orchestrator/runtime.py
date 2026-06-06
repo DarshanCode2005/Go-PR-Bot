@@ -9,6 +9,7 @@ from go_agent.coder import CoderArtifact
 from go_agent.config import get_settings
 from go_agent.context_builder import ContextBundle
 from go_agent.github_issues import IssueContext
+from go_agent.git_util import run_git
 from go_agent.orchestrator.state import AgentState
 from go_agent.planner import FixPlan
 from go_agent.run_context import RunContext
@@ -66,6 +67,13 @@ def branch_base_sha(state: AgentState) -> str:
         msg = "branch_meta.base_sha missing from state"
         raise ValueError(msg)
     return str(base_sha)
+
+
+def integration_base_sha(state: AgentState, repo_path: Path) -> str:
+    """Return git base for integrator: branch base on first pass, HEAD on fix iterations."""
+    if state.get("iteration", 0) > 0:
+        return run_git(["rev-parse", "HEAD"], cwd=repo_path)
+    return branch_base_sha(state)
 
 
 def coder_artifact_from_state(state: AgentState) -> CoderArtifact:

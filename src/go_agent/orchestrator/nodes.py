@@ -1,9 +1,15 @@
-"""LangGraph node functions — plan/code/integrate wired; test/fix/review/pr stubbed."""
+"""LangGraph node functions — plan/code/integrate/test/lint wired; fix/review/pr partial."""
 
 from __future__ import annotations
 
 from go_agent.coder import build_proposed_patch, write_coder_artifact
 from go_agent.config import get_settings
+from go_agent.fixer import (
+    build_corrective_patch,
+    build_failure_context,
+    write_fix_meta,
+)
+from go_agent.fixer import FixMeta
 from go_agent.integrator import integrate_file_patches, write_integrator_artifact
 from go_agent.lint_runner import LintRunError, combined_output as lint_combined_output
 from go_agent.lint_runner import run_lints, write_lint_result
@@ -11,6 +17,7 @@ from go_agent.orchestrator.runtime import (
     branch_base_sha,
     bundle_from_state,
     coder_artifact_from_state,
+    integration_base_sha,
     issue_from_state,
     logger_for_state,
     plan_from_state,
@@ -60,6 +67,14 @@ def code_node(state: AgentState) -> AgentState:
     issue = issue_from_state(state)
     plan = plan_from_state(state)
     bundle = bundle_from_state(state)
+    iteration = state.get("iteration", 0)
+
+    if iteration > 0:
+        logger.info("Using fix iteration %d patch from fix agent", iteration)
+        return {
+            "status": "coding",
+            "last_node": "code",
+        }
 
     artifact = build_proposed_patch(
         repo_path,
@@ -83,14 +98,16 @@ def integrate_node(state: AgentState) -> AgentState:
     repo_path = repo_path_from_state(state)
     issue = issue_from_state(state)
     plan = plan_from_state(state)
-    base_sha = branch_base_sha(state)
+    branch_base = branch_base_sha(state)
+    integration_base = integration_base_sha(state, repo_path)
+    iteration = state.get("iteration", 0)
     artifact = coder_artifact_from_state(state)
 
     result = integrate_file_patches(
         repo_path,
         artifact.files,
         plan,
-        base_sha,
+        integration_base,
         settings,
         logger=logger,
     )
@@ -101,13 +118,15 @@ def integrate_node(state: AgentState) -> AgentState:
         result.resolved_patch,
         issue.number,
         issue.title[:50],
-        base_sha,
+        branch_base,
         logger,
+        stack_on_head=iteration > 0,
     )
     logger.info(
-        "Integrator patch applied; commit %s; changes at %s",
+        "Integrator patch applied; commit %s; changes at %s (iteration=%d)",
         patch_result.commit_sha[:8],
         patch_result.changes_patch_path,
+        iteration,
     )
     return {
         "status": "integrating",
@@ -146,10 +165,11 @@ def test_node(state: AgentState) -> AgentState:
         source=result.source,
     )
     logger.info(
-        "Tests %s (%d command(s), source=%s)",
+        "Tests %s (%d command(s), source=%s, iteration=%d)",
         "passed" if result.passed else "failed",
         len(result.commands),
         result.source,
+        state.get("iteration", 0),
     )
     return {
         "status": "testing",
@@ -185,11 +205,12 @@ def lint_node(state: AgentState) -> AgentState:
         findings=[finding.model_dump() for finding in result.findings],
     )
     logger.info(
-        "Lint %s (%d command(s), source=%s, %d finding(s))",
+        "Lint %s (%d command(s), source=%s, %d finding(s), iteration=%d)",
         "passed" if result.passed else "failed",
         len(result.commands),
         result.source,
         len(result.findings),
+        state.get("iteration", 0),
     )
     return {
         "status": "linting",
@@ -199,27 +220,87 @@ def lint_node(state: AgentState) -> AgentState:
 
 
 def fix_node(state: AgentState) -> AgentState:
-    iteration = state.get("iteration", 0) + 1
+    ctx = run_context_from_state(state)
+    settings = get_settings()
+    logger = logger_for_state(state)
+    repo_path = repo_path_from_state(state)
+    issue = issue_from_state(state)
+    plan = plan_from_state(state)
+    bundle = bundle_from_state(state)
+
+    fix_context = build_failure_context(state, max_iterations=settings.max_fix_iterations)
+    logger.info(
+        "Fix iteration %d/%d (source=%s)",
+        fix_context.iteration,
+        fix_context.max_iterations,
+        fix_context.failure_source,
+    )
+
+    artifact = build_corrective_patch(
+        repo_path,
+        issue,
+        plan,
+        bundle,
+        fix_context,
+        settings,
+        logger=logger,
+    )
+    write_coder_artifact(ctx, artifact)
+    write_fix_meta(
+        ctx,
+        FixMeta(
+            iteration=fix_context.iteration,
+            max_iterations=fix_context.max_iterations,
+            failure_source=fix_context.failure_source,
+            error_summary=(
+                fix_context.test_output[:500]
+                if fix_context.failure_source == "test"
+                else fix_context.lint_output[:500]
+            ),
+            files=[item.path for item in artifact.files],
+        ),
+    )
     return {
         "status": "fixing",
         "last_node": "fix",
-        "iteration": iteration,
+        "iteration": fix_context.iteration,
     }
 
 
 def review_node(state: AgentState) -> AgentState:
+    settings = get_settings()
+    logger = logger_for_state(state)
+    iteration = state.get("iteration", 0)
     test_result = state.get("test_result") or {}
-    passed = bool(test_result.get("passed"))
-    if passed:
+    lint_result = state.get("lint_result") or {}
+    test_passed = bool(test_result.get("passed"))
+    lint_passed = bool(lint_result.get("passed")) if lint_result else True
+
+    if test_passed and lint_passed:
         review = ReviewResult(approved=True, comments=["stub: approved"])
+        logger.info("Review approved after iteration=%d", iteration)
         return {
             "status": "reviewing",
             "last_node": "review",
             "review": review.model_dump(),
         }
+
+    cap = settings.max_fix_iterations
+    if iteration >= cap:
+        review = ReviewResult(
+            approved=False,
+            comments=[f"max fix iterations ({cap}) exceeded after iteration {iteration}"],
+        )
+        logger.error("Review failed: max fix iterations (%d) exceeded at iteration=%d", cap, iteration)
+        return {
+            "status": "failed",
+            "last_node": "review",
+            "review": review.model_dump(),
+        }
+
     review = ReviewResult(
         approved=False,
-        comments=["stub: tests still failing after max iterations"],
+        comments=["stub: validation still failing"],
     )
     return {
         "status": "failed",
@@ -229,8 +310,11 @@ def review_node(state: AgentState) -> AgentState:
 
 
 def pr_node(state: AgentState) -> AgentState:
+    logger = logger_for_state(state)
     status = state.get("status")
+    iteration = state.get("iteration", 0)
     final_status = "done" if status != "failed" else "failed"
+    logger.info("Run finished iteration=%d status=%s", iteration, final_status)
     return {
         "status": final_status,
         "last_node": "pr",

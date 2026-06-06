@@ -135,13 +135,15 @@ def apply_patch_and_commit(
     summary: str,
     base_sha: str,
     logger: logging.Logger,
+    *,
+    stack_on_head: bool = False,
 ) -> PatchResult:
     """Apply patch, commit with standard message, and export changes.patch."""
     changes_path = ctx.artifact_dir / "changes.patch"
     message = format_commit_message(summary, issue_number)
     head = run_git(["rev-parse", "HEAD"], cwd=repo_path)
 
-    if head != base_sha:
+    if head != base_sha and not stack_on_head:
         if not changes_path.exists():
             logger.warning(
                 "Branch already has commits beyond %s; re-exporting changes.patch",

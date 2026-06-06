@@ -167,6 +167,45 @@ def test_recovers_orphaned_commit_when_export_failed(
     assert "+v2" in result.changes_patch_path.read_text(encoding="utf-8")
 
 
+def test_apply_stack_on_head_commits_second_patch(tmp_path, monkeypatch, bare_repo_url: str):
+    monkeypatch.chdir(tmp_path)
+    ctx, repo_path, branch, logger = _setup_repo(tmp_path, bare_repo_url)
+
+    first = apply_patch_and_commit(
+        repo_path,
+        ctx,
+        README_PATCH,
+        42,
+        "Update readme",
+        branch.base_sha,
+        logger,
+    )
+    assert first.commit_sha
+
+    second_patch = """\
+diff --git a/README.md b/README.md
+--- a/README.md
++++ b/README.md
+@@ -1 +1 @@
+-v2
++v3
+"""
+    second = apply_patch_and_commit(
+        repo_path,
+        ctx,
+        second_patch,
+        42,
+        "Update readme again",
+        branch.base_sha,
+        logger,
+        stack_on_head=True,
+    )
+
+    assert second.commit_sha != first.commit_sha
+    assert (repo_path / "README.md").read_text(encoding="utf-8") == "v3\n"
+    assert "+v3" in second.changes_patch_path.read_text(encoding="utf-8")
+
+
 def test_cli_patch_file(tmp_path, monkeypatch, bare_repo_url: str):
     monkeypatch.setenv("GO_AGENT_ARTIFACTS_DIR", str(tmp_path / "artifacts"))
     monkeypatch.setenv("GO_AGENT_WORK_DIR", str(tmp_path / "workspaces"))

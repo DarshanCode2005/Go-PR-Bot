@@ -6,6 +6,7 @@ from go_agent.orchestrator.graph import (
     VALIDATION_NODE_NAMES,
     build_graph,
     compile_graph,
+    route_after_lint,
     route_after_test,
     route_after_test_validation,
 )
@@ -21,6 +22,7 @@ __all__ = [
     "TestResult",
     "build_graph",
     "compile_graph",
+    "route_after_lint",
     "route_after_test",
     "route_after_test_validation",
 ]

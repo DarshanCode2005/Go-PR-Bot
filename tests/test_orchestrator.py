@@ -13,7 +13,7 @@ from go_agent.orchestrator import (
     VALIDATION_NODE_NAMES,
     compile_graph,
 )
-from go_agent.orchestrator.graph import route_after_test, route_after_test_validation
+from go_agent.orchestrator.graph import route_after_lint, route_after_test, route_after_test_validation
 from go_agent.orchestrator.state import AgentState
 from go_agent.patches import PatchResult
 from go_agent.planner import FixPlan
@@ -87,12 +87,13 @@ def test_full_graph_edges():
     assert ("code", "integrate") in linear
     assert ("integrate", "test") in linear
     assert ("fix", "code") in linear
-    assert ("lint", "review") in linear
     assert ("review", "pr") in linear
     assert ("pr", "__end__") in linear
     assert ("test", "fix") in conditional
     assert ("test", "lint") in conditional
     assert ("test", "review") in conditional
+    assert ("lint", "fix") in conditional
+    assert ("lint", "review") in conditional
 
 
 def _base_sha(repo_path: Path) -> str:
@@ -264,6 +265,21 @@ def test_validation_skips_lint_when_tests_fail(tmp_path, monkeypatch):
     assert not (artifact_dir / "lint_result.json").exists()
 
 
+def test_route_after_lint_pass():
+    state = {"lint_result": {"passed": True}, "iteration": 0}
+    assert route_after_lint(state, max_fix_iterations=5) == "review"
+
+
+def test_route_after_lint_fix_loop():
+    state = {"lint_result": {"passed": False}, "iteration": 0}
+    assert route_after_lint(state, max_fix_iterations=5) == "fix"
+
+
+def test_route_after_lint_max_iterations():
+    state = {"lint_result": {"passed": False}, "iteration": 5}
+    assert route_after_lint(state, max_fix_iterations=5) == "review"
+
+
 def test_route_after_test_fix_loop():
     state = {"test_result": {"passed": False}, "iteration": 0}
     assert route_after_test(state, max_fix_iterations=5) == "fix"
@@ -308,6 +324,15 @@ def _stub_integrate_node(state: AgentState) -> AgentState:
     return {"status": "integrating", "last_node": "integrate"}
 
 
+def _stub_fix_node(state: AgentState) -> AgentState:
+    iteration = state.get("iteration", 0) + 1
+    return {
+        "status": "fixing",
+        "last_node": "fix",
+        "iteration": iteration,
+    }
+
+
 def test_full_invoke_fix_loop_visits_fix_and_code():
     with patch.dict(
         "go_agent.orchestrator.graph._NODE_FUNCS",
@@ -316,6 +341,7 @@ def test_full_invoke_fix_loop_visits_fix_and_code():
             "code": _stub_code_node,
             "integrate": _stub_integrate_node,
             "test": _failing_test_node,
+            "fix": _stub_fix_node,
         },
     ):
         compiled = compile_graph(implement_only=False, max_fix_iterations=1)
@@ -335,6 +361,7 @@ def test_full_invoke_max_iterations_marks_failed():
             "code": _stub_code_node,
             "integrate": _stub_integrate_node,
             "test": _failing_test_node,
+            "fix": _stub_fix_node,
         },
     ):
         compiled = compile_graph(implement_only=False, max_fix_iterations=1)
@@ -448,6 +475,7 @@ def test_architecture_lists_graph_nodes():
         "plan --> code",
         "code --> integrate",
         "integrate --> test",
-        "test --> endNode",
+        "fix --> code",
+        "review --> pr",
     ):
         assert edge in section, f"LangGraph mermaid must include edge {edge!r}"

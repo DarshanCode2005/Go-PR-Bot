@@ -152,18 +152,26 @@ Conceptual edges (full system, not all nodes in stub graph yet):
 
 Module: [`src/go_agent/orchestrator/`](../src/go_agent/orchestrator/)
 
-**Wired nodes (Epic 4 + validation):** `plan`, `code`, `integrate`, `test` — planner/coder/integrator agents plus subprocess test runner ([`test_runner.py`](../src/go_agent/test_runner.py)). CLI invokes `compile_graph(include_test=True)` after setup and branch creation.
+**Wired nodes:** `plan`, `code`, `integrate`, `test`, `lint`, `fix` — plus stub `review`, `pr`. CLI invokes `compile_graph(include_test=True, include_closed_loop=True)` after setup and branch creation.
 
-**Stub nodes (later issues):** `fix`, `review`, `pr` — exist in `compile_graph(include_closed_loop=True)` but are not reached from the default validation graph.
+**Validation-only graph** (`include_test=True`, `include_closed_loop=False`): test → lint (if pass) → END; used in fast offline tests.
 
-Default validation graph (`include_test=True`):
+Default closed-loop graph (CLI):
 
 ```mermaid
 flowchart TB
   plan --> code
   code --> integrate
   integrate --> test
-  test --> endNode["END"]
+  test -->|"fail and iteration lt max"| fix
+  test -->|pass| lint
+  test -->|"fail and iteration gte max"| review
+  lint -->|"fail and iteration lt max"| fix
+  lint -->|pass| review
+  lint -->|"fail and iteration gte max"| review
+  fix --> code
+  review --> pr
+  pr --> endNode["END"]
 ```
 
 Legacy implement-only graph (`implement_only=True`):
@@ -175,29 +183,31 @@ flowchart TB
   integrate --> endImplement["END"]
 ```
 
-Full closed-loop graph (`include_closed_loop=True`, for future fix/review wiring):
-
-```mermaid
-flowchart TB
-  plan --> code
-  code --> integrate
-  integrate --> test
-  test -->|"fail and iteration lt max"| fix
-  test -->|pass or max iterations| review
-  fix --> code
-  review --> pr
-  pr --> endNodeFull["END"]
-```
-
-Routing from `test` (full graph only):
+Routing from `test`:
 
 | Condition | Next node |
 |-----------|-----------|
-| `test_result.passed` is true | `review` |
+| `test_result.passed` is true | `lint` |
 | failed and `iteration < max_fix_iterations` | `fix` |
 | failed and `iteration >= max_fix_iterations` | `review` (status `failed`) |
 
-`fix` increments `iteration` and returns to `code`. Fix-loop cap uses `GO_AGENT_MAX_FIX_ITERATIONS` (default 5).
+Routing from `lint`:
+
+| Condition | Next node |
+|-----------|-----------|
+| `lint_result.passed` is true | `review` |
+| failed and `iteration < max_fix_iterations` | `fix` |
+| failed and `iteration >= max_fix_iterations` | `review` (status `failed`) |
+
+`fix` calls the fix agent ([`fixer.py`](../src/go_agent/fixer.py)), increments `iteration`, writes `fix_meta.json`, then returns to `code`. Fix-loop cap uses `GO_AGENT_MAX_FIX_ITERATIONS` (default 5).
+
+### Fix agent
+
+Module: [`src/go_agent/fixer.py`](../src/go_agent/fixer.py)
+
+- Consumes `test_result` / `lint_result` output and lint `file:line` findings
+- Generates corrective patches via fast-tier LLM (reuses coder patch pipeline)
+- Writes `fix_meta.json` with iteration, failure source, and error summary
 
 ### Test runner
 
@@ -207,7 +217,7 @@ Module: [`src/go_agent/test_runner.py`](../src/go_agent/test_runner.py)
 - Repo skill override: YAML frontmatter `test_commands:` in `skills/{owner__repo}/SKILL.md`, or first ` ```bash ` block containing `go test`
 - Runs commands in the cloned repo with `GO_AGENT_TEST_TIMEOUT` (default 300s)
 - Writes `artifacts/{run_id}/test_result.json` with per-command exit code, stdout/stderr, duration
-- CLI exits **1** when tests fail (fix loop deferred to Backlog #24)
+- CLI exits **1** when tests fail before max iterations are exhausted, or when max fix iterations are exceeded (`status=failed`)
 
 ---
 
