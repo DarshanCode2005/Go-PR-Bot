@@ -1,4 +1,4 @@
-"""LangGraph workflow builder — implement phase and full closed-loop graphs."""
+"""LangGraph workflow builder — implement, validation, and full closed-loop graphs."""
 
 from __future__ import annotations
 
@@ -9,7 +9,8 @@ from go_agent.orchestrator import nodes
 from go_agent.orchestrator.state import AgentState
 
 IMPLEMENT_NODE_NAMES: tuple[str, ...] = ("plan", "code", "integrate")
-GRAPH_NODE_NAMES: tuple[str, ...] = (*IMPLEMENT_NODE_NAMES, "test", "fix", "review", "pr")
+VALIDATION_NODE_NAMES: tuple[str, ...] = (*IMPLEMENT_NODE_NAMES, "test")
+GRAPH_NODE_NAMES: tuple[str, ...] = (*VALIDATION_NODE_NAMES, "fix", "review", "pr")
 
 _NODE_FUNCS = {
     "plan": nodes.plan_node,
@@ -48,17 +49,45 @@ def _add_closed_loop_tail(
     graph.add_edge("pr", END)
 
 
+def _resolve_graph_mode(
+    *,
+    include_test: bool | None,
+    include_closed_loop: bool | None,
+    implement_only: bool | None,
+) -> tuple[bool, bool]:
+    if include_test is not None or include_closed_loop is not None:
+        return include_test or False, include_closed_loop or False
+    if implement_only is False:
+        return True, True
+    if implement_only is True:
+        return False, False
+    return False, False
+
+
 def build_graph(
     *,
-    implement_only: bool = True,
+    include_test: bool | None = None,
+    include_closed_loop: bool | None = None,
+    implement_only: bool | None = None,
     max_fix_iterations: int | None = None,
     settings: Settings | None = None,
 ) -> StateGraph:
     """Build the orchestrator StateGraph (not yet compiled)."""
     settings = settings or get_settings()
     cap = max_fix_iterations if max_fix_iterations is not None else settings.max_fix_iterations
+    test_enabled, closed_loop = _resolve_graph_mode(
+        include_test=include_test,
+        include_closed_loop=include_closed_loop,
+        implement_only=implement_only,
+    )
 
-    node_names = IMPLEMENT_NODE_NAMES if implement_only else GRAPH_NODE_NAMES
+    if closed_loop:
+        node_names = GRAPH_NODE_NAMES
+    elif test_enabled:
+        node_names = VALIDATION_NODE_NAMES
+    else:
+        node_names = IMPLEMENT_NODE_NAMES
+
     graph: StateGraph = StateGraph(AgentState)
     for name in node_names:
         graph.add_node(name, _NODE_FUNCS[name])
@@ -67,23 +96,30 @@ def build_graph(
     graph.add_edge("plan", "code")
     graph.add_edge("code", "integrate")
 
-    if implement_only:
-        graph.add_edge("integrate", END)
-    else:
+    if closed_loop:
         graph.add_edge("integrate", "test")
         _add_closed_loop_tail(graph, max_fix_iterations=cap)
+    elif test_enabled:
+        graph.add_edge("integrate", "test")
+        graph.add_edge("test", END)
+    else:
+        graph.add_edge("integrate", END)
 
     return graph
 
 
 def compile_graph(
     *,
-    implement_only: bool = True,
+    include_test: bool | None = None,
+    include_closed_loop: bool | None = None,
+    implement_only: bool | None = None,
     max_fix_iterations: int | None = None,
     settings: Settings | None = None,
 ):
     """Compile the orchestrator graph for invoke/stream."""
     return build_graph(
+        include_test=include_test,
+        include_closed_loop=include_closed_loop,
         implement_only=implement_only,
         max_fix_iterations=max_fix_iterations,
         settings=settings,

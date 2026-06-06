@@ -10,6 +10,7 @@ from go_agent.integrator import IntegratorResult
 from go_agent.orchestrator import (
     GRAPH_NODE_NAMES,
     IMPLEMENT_NODE_NAMES,
+    VALIDATION_NODE_NAMES,
     compile_graph,
 )
 from go_agent.orchestrator.graph import route_after_test
@@ -30,6 +31,25 @@ def test_graph_compiles():
 def test_graph_compiles_full():
     compiled = compile_graph(implement_only=False)
     assert compiled is not None
+
+
+def test_graph_compiles_validation():
+    compiled = compile_graph(include_test=True)
+    assert compiled is not None
+
+
+def test_validation_graph_has_expected_nodes():
+    compiled = compile_graph(include_test=True)
+    node_ids = set(compiled.get_graph().nodes)
+    assert node_ids == set(VALIDATION_NODE_NAMES) | {"__start__", "__end__"}
+
+
+def test_validation_graph_edges():
+    compiled = compile_graph(include_test=True)
+    edges = compiled.get_graph().edges
+    linear = {(e.source, e.target) for e in edges if not e.conditional}
+    assert ("integrate", "test") in linear
+    assert ("test", "__end__") in linear
 
 
 def test_implement_graph_has_expected_nodes():
@@ -122,6 +142,44 @@ def test_implement_invoke_happy_path(tmp_path, monkeypatch):
     assert (artifact_dir / "proposed.patch").exists()
     assert (artifact_dir / "integrator_meta.json").exists()
     assert (artifact_dir / "changes.patch").exists()
+
+
+def test_validation_invoke_happy_path(tmp_path, monkeypatch):
+    repo_path = tmp_path / "repo"
+    init_git_repo(repo_path, files={"README.md": "hello\n"})
+    artifact_dir = tmp_path / "artifacts" / "run-val"
+    artifact_dir.mkdir(parents=True)
+    enable_agent_mocks(monkeypatch)
+
+    compiled = compile_graph(include_test=True)
+    result = compiled.invoke(
+        {
+            "run_id": "run-val",
+            "repo": "gin-gonic/gin",
+            "issue_number": 1,
+            "artifact_dir": str(artifact_dir),
+            "repo_path": str(repo_path),
+            "scope_hints": [],
+            "issue_context": {
+                "repo": "gin-gonic/gin",
+                "number": 1,
+                "title": "Update readme",
+                "state": "open",
+            },
+            "context_bundle": {
+                "repo": "gin-gonic/gin",
+                "issue_number": 1,
+                "files": [],
+                "total_chars": 0,
+                "budget_chars": 12000,
+            },
+            "branch_meta": {"base_sha": _base_sha(repo_path), "branch_name": "agent/issue-1"},
+            "iteration": 0,
+        }
+    )
+    assert result["last_node"] == "test"
+    assert result.get("test_result", {}).get("passed") is True
+    assert (artifact_dir / "test_result.json").exists()
 
 
 def test_route_after_test_fix_loop():
@@ -304,5 +362,10 @@ def test_architecture_lists_graph_nodes():
     for name in IMPLEMENT_NODE_NAMES:
         assert name in section, f"LangGraph section must mention wired node {name!r}"
 
-    for edge in ("plan --> code", "code --> integrate", "integrate --> endNode"):
+    for edge in (
+        "plan --> code",
+        "code --> integrate",
+        "integrate --> test",
+        "test --> endNode",
+    ):
         assert edge in section, f"LangGraph mermaid must include edge {edge!r}"

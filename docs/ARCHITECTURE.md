@@ -152,20 +152,30 @@ Conceptual edges (full system, not all nodes in stub graph yet):
 
 Module: [`src/go_agent/orchestrator/`](../src/go_agent/orchestrator/)
 
-**Wired nodes (Epic 4):** `plan`, `code`, `integrate` — call `build_fix_plan`, `build_proposed_patch`, and `integrate_file_patches` + `apply_patch_and_commit`. CLI invokes `compile_graph(implement_only=True)` after setup and branch creation.
+**Wired nodes (Epic 4 + validation):** `plan`, `code`, `integrate`, `test` — planner/coder/integrator agents plus subprocess test runner ([`test_runner.py`](../src/go_agent/test_runner.py)). CLI invokes `compile_graph(include_test=True)` after setup and branch creation.
 
-**Stub nodes (later issues):** `test`, `fix`, `review`, `pr` — exist in `build_graph(implement_only=False)` but are not reached from the default implement graph.
+**Stub nodes (later issues):** `fix`, `review`, `pr` — exist in `compile_graph(include_closed_loop=True)` but are not reached from the default validation graph.
 
-Default implement graph (`implement_only=True`):
+Default validation graph (`include_test=True`):
 
 ```mermaid
 flowchart TB
   plan --> code
   code --> integrate
-  integrate --> endNode["END"]
+  integrate --> test
+  test --> endNode["END"]
 ```
 
-Full closed-loop graph (`implement_only=False`, for future test/review wiring):
+Legacy implement-only graph (`implement_only=True`):
+
+```mermaid
+flowchart TB
+  plan --> code
+  code --> integrate
+  integrate --> endImplement["END"]
+```
+
+Full closed-loop graph (`include_closed_loop=True`, for future fix/review wiring):
 
 ```mermaid
 flowchart TB
@@ -188,6 +198,16 @@ Routing from `test` (full graph only):
 | failed and `iteration >= max_fix_iterations` | `review` (status `failed`) |
 
 `fix` increments `iteration` and returns to `code`. Fix-loop cap uses `GO_AGENT_MAX_FIX_ITERATIONS` (default 5).
+
+### Test runner
+
+Module: [`src/go_agent/test_runner.py`](../src/go_agent/test_runner.py)
+
+- Reads `test_commands` from `plan.json` via `resolve_test_commands()` in [`skills.py`](../src/go_agent/skills.py)
+- Repo skill override: YAML frontmatter `test_commands:` in `skills/{owner__repo}/SKILL.md`, or first ` ```bash ` block containing `go test`
+- Runs commands in the cloned repo with `GO_AGENT_TEST_TIMEOUT` (default 300s)
+- Writes `artifacts/{run_id}/test_result.json` with per-command exit code, stdout/stderr, duration
+- CLI exits **1** when tests fail (fix loop deferred to Backlog #24)
 
 ---
 

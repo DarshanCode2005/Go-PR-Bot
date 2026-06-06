@@ -1,3 +1,8 @@
+---
+test_commands:
+  - go test ./... -count=1
+---
+
 # gin-gonic/gin
 
 Load upstream README for latest test instructions. Typical validation:

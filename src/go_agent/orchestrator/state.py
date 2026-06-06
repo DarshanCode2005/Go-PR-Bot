@@ -21,11 +21,14 @@ AgentStatus = Literal[
 
 
 class TestResult(BaseModel):
-    """Result of a validation subprocess (stub until test runner is wired)."""
+    """Result of a validation subprocess."""
 
     passed: bool = False
+    exit_code: int = 0
     output: str = ""
     command: str = ""
+    commands: list[str] = Field(default_factory=list)
+    source: str = "plan"
 
 
 class ReviewResult(BaseModel):

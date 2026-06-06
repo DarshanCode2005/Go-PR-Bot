@@ -35,6 +35,7 @@ from go_agent.coder import CoderError
 from go_agent.integrator import IntegratorError
 from go_agent.orchestrator import compile_graph
 from go_agent.planner import PlanError
+from go_agent.test_runner import TestRunError
 from go_agent.repo_rag import (
     build_rag_query,
     merge_search_hits,
@@ -241,9 +242,10 @@ def run(
 
     patch_text: str | None = None
     commit_message: str | None = None
+    tests_passed = True
     if patch_file is None:
         try:
-            final_state = compile_graph(implement_only=True).invoke(
+            final_state = compile_graph(include_test=True).invoke(
                 {
                     "run_id": ctx.run_id,
                     "repo": repo,
@@ -266,9 +268,10 @@ def run(
                 patch_text = Path(changes_path).read_text(encoding="utf-8")
             commit_message = final_state.get("commit_message")
             logger.info(
-                "Implement graph complete last_node=%s patch_applied=%s",
+                "Validation graph complete last_node=%s patch_applied=%s test_passed=%s",
                 final_state.get("last_node"),
                 final_state.get("patch_applied"),
+                (final_state.get("test_result") or {}).get("passed"),
             )
         except PlanError as exc:
             logger.error("Planner failed: %s", exc)
@@ -282,6 +285,11 @@ def run(
         except PatchApplyError as exc:
             logger.error("Integrator patch apply failed: %s", exc)
             raise typer.Exit(code=1) from exc
+        except TestRunError as exc:
+            logger.error("Test runner failed: %s", exc)
+            raise typer.Exit(code=1) from exc
+
+        tests_passed = bool((final_state.get("test_result") or {}).get("passed"))
     elif patch_file is not None:
         try:
             patch_text = patch_file.read_text(encoding="utf-8")
@@ -314,6 +322,10 @@ def run(
     )
     pr_path = write_pr_md(ctx, pr_draft)
     logger.info("PR draft written to %s", pr_path)
+
+    if patch_file is None and not tests_passed:
+        logger.error("Tests failed; see %s/test_result.json", ctx.artifact_dir)
+        raise typer.Exit(code=1)
 
     if not dry_run and create_pr:
         try:

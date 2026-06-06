@@ -50,3 +50,4 @@ def test_run_writes_branch_meta(tmp_path, monkeypatch, bare_repo_url: str):
     assert (artifact_dirs[0] / "coder_meta.json").exists()
     assert (artifact_dirs[0] / "integrator_meta.json").exists()
     assert (artifact_dirs[0] / "changes.patch").exists()
+    assert (artifact_dirs[0] / "test_result.json").exists()

@@ -31,6 +31,28 @@ MOCK_SCOPE_JSON = '{"scope_hints": []}'
 MOCK_SUMMARY = "Summary of the file for the coding agent."
 
 
+def mock_run_tests(*args, **kwargs):
+    from go_agent.test_runner import CommandResult, TestRunResult
+
+    command = "go test ./... -count=1"
+    return TestRunResult(
+        passed=True,
+        commands=[
+            CommandResult(
+                command=command,
+                exit_code=0,
+                passed=True,
+                stdout="ok",
+                stderr="",
+                duration_seconds=0.1,
+            )
+        ],
+        resolved_commands=[command],
+        source="plan",
+        plan_commands=[command],
+    )
+
+
 def run_git(args: list[str], *, cwd: Path) -> None:
     subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True)
 
@@ -84,6 +106,7 @@ def enable_agent_mocks(
     clear_settings_cache()
     effective_transport = transport or agent_mock_transport
     monkeypatch.setattr("go_agent.llm_client._TRANSPORT", effective_transport)
+    monkeypatch.setattr("go_agent.orchestrator.nodes.run_tests", mock_run_tests)
 
 
 def enable_planner_mock(
