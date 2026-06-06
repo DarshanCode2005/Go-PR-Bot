@@ -36,6 +36,7 @@ Step-by-step record of what was built for each backlog item in [Go-PR-Bot](https
 | #26 Review agent | [#27](https://github.com/DarshanCode2005/Go-PR-Bot/issues/27) | Done |
 | #27 Review format/lint context | [#28](https://github.com/DarshanCode2005/Go-PR-Bot/issues/28) | Done |
 | #28 Review fix loop | [#29](https://github.com/DarshanCode2005/Go-PR-Bot/issues/29) | Done |
+| #31 Skill: go-playground/validator | [#32](https://github.com/DarshanCode2005/Go-PR-Bot/issues/32) | Done |
 
 ---
 
@@ -87,7 +88,7 @@ go-agent resume --run-id <uuid>
 
 **Approved repos:** `gin-gonic/gin`, `spf13/cobra`, `go-playground/validator`, `golangci/golangci-lint`
 
-**Test suite:** 236 tests, `pytest -q && ruff check src tests`
+**Test suite:** 240 tests, `pytest -q && ruff check src tests`
 
 ---
 
@@ -1728,6 +1729,47 @@ pytest -q && ruff check src tests
 
 ---
 
+### Backlog #31 — Skill: go-playground/validator
+
+**GitHub:** [#32](https://github.com/DarshanCode2005/Go-PR-Bot/issues/32)  
+**Commit:** (pending) `docs(skill): go-playground/validator repo skill (fixes #32)`  
+**PR:** (pending)
+
+#### What was built
+
+**`skills/go-playground__validator/SKILL.md`**
+
+- Frontmatter `test_commands`: `go test -race ./... -count=1` (matches upstream CI/Makefile)
+- Frontmatter `lint_commands`: `go vet ./...`, `golangci-lint run` (repo ships `.golangci.yaml`)
+- Architecture map: `baked_in.go`, `cache.go`, `validator.go`, translations, non-standard validators
+- Conventions: v10 API stability, singleton `Validate`, tag registration checklist, PR test requirement
+- Issue patterns: tag semantics, empty-string edge cases, custom types via `RegisterCustomTypeFunc`
+
+**`tests/test_skills_validator.py`**
+
+- Skill file exists; `load_skill_text` content checks
+- `resolve_test_commands` / `resolve_lint_commands` skill override for `go-playground/validator`
+
+#### Key decisions
+
+- Skill directory name uses `repo_slug()` convention: `go-playground__validator`
+- Race detector in test command to align with upstream `make test` / GitHub Actions
+- Explicit lint override because validator relies on golangci-lint v2 config
+
+#### Dependencies on prior issues
+
+- Backlog #22 — skill `test_commands` resolution
+- Backlog #23 — skill `lint_commands` resolution
+
+#### Verification
+
+```bash
+pytest tests/test_skills_validator.py tests/test_test_runner.py tests/test_lint_runner.py -q
+pytest -q && ruff check src tests
+```
+
+---
+
 ## Template for future issues
 
 Copy this block when appending the next implemented issue.
@@ -1822,4 +1864,4 @@ See `.env.example` and `config.py`. Minimum for current pipeline:
 
 ---
 
-*Last updated: after Backlog #28 (GitHub #29) — review request_changes fix loop.*
+*Last updated: after Backlog #28 (GitHub #29) and #31 (GitHub #32) — review fix loop; go-playground/validator repo skill.*
