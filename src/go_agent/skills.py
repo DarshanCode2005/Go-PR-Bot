@@ -40,7 +40,14 @@ def _parse_frontmatter_test_commands(skill_text: str) -> list[str] | None:
         if stripped.startswith("test_commands:"):
             in_test_commands = True
             inline = stripped.split(":", 1)[1].strip()
-            if inline and not inline.startswith("["):
+            if inline and inline.startswith("["):
+                inner = inline.strip("[]")
+                commands.extend(
+                    item.strip().strip("\"'")
+                    for item in inner.split(",")
+                    if item.strip().strip("\"'")
+                )
+            elif inline:
                 commands.append(inline.strip("\"'"))
             continue
         if in_test_commands:
