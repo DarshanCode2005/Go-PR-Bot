@@ -339,6 +339,17 @@ def run(
     pr_path = write_pr_md(ctx, pr_draft)
     logger.info("PR draft written to %s", pr_path)
 
+    if patch_file is None and final_state.get("status") == "failed":
+        review = final_state.get("review") or {}
+        comments = review.get("comments") or []
+        detail = comments[0] if comments else "validation failed after max fix iterations"
+        logger.error(
+            "Run failed after iteration=%d: %s",
+            final_state.get("iteration", 0),
+            detail,
+        )
+        raise typer.Exit(code=1)
+
     if patch_file is None and not tests_passed:
         logger.error("Tests failed; see %s/test_result.json", ctx.artifact_dir)
         raise typer.Exit(code=1)
@@ -357,17 +368,6 @@ def run(
             )
         else:
             logger.error("Lint failed; see %s/lint_result.json", ctx.artifact_dir)
-        raise typer.Exit(code=1)
-
-    if patch_file is None and final_state.get("status") == "failed":
-        review = final_state.get("review") or {}
-        comments = review.get("comments") or []
-        detail = comments[0] if comments else "validation failed after max fix iterations"
-        logger.error(
-            "Run failed after iteration=%d: %s",
-            final_state.get("iteration", 0),
-            detail,
-        )
         raise typer.Exit(code=1)
 
     if not dry_run and create_pr:
