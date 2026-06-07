@@ -149,21 +149,26 @@ After tests and lint pass, the review agent writes `review.json` with `decision`
 
 ## Architecture
 
-High-level flow from issue to artifacts:
+Closed-loop routing (LangGraph):
 
 ```mermaid
-flowchart TB
-  cli[CLI setup clone context branch]
-  lgLoop[LangGraph closed loop]
-  out[artifacts run_id]
-  cli --> lgLoop --> out
-  subgraph graphNodes [Graph nodes]
-    plan[plan] --> code[code] --> integrate[integrate]
-    integrate --> test[test] --> lint[lint] --> review[review] --> pr[pr]
-    test -->|fail| fix[fix] --> code
-    lint -->|fail| fix
-    review -->|request_changes| fix
-  end
+%%{init: {'theme': 'neutral'}}%%
+flowchart TD
+    plan --> code --> integrate --> test
+    test -->|pass| lint
+    test -->|"fail & iteration < max_fix_iterations"| fix
+    test -->|"fail & iteration >= max_fix_iterations"| review
+    lint -->|pass| review
+    lint -->|"fail & iteration < max_fix_iterations"| fix
+    lint -->|"fail & iteration >= max_fix_iterations"| review
+    fix --> code
+    review -->|approve| pr
+    review -->|"request_changes & review_round < max_review_rounds"| fix
+    review -->|"reject or review_round >= max_review_rounds"| pr
+    pr --> END["END"]
+
+    style review fill:#f9c74f,stroke:#f08030
+    style fix fill:#90be6d,stroke:#43aa8b
 ```
 
 LLM tiers by stage:
