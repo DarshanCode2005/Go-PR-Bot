@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import time
 from typing import Literal, Protocol
 
@@ -30,7 +31,23 @@ def llm_available(settings: Settings) -> bool:
         or settings.anthropic_api_key
         or settings.groq_api_key
         or settings.xai_api_key
+        or settings.gemini_api_key
     )
+
+
+def _apply_llm_credentials(settings: Settings) -> None:
+    """Expose configured API keys to LiteLLM via environment variables."""
+    mapping = {
+        "OPENAI_API_KEY": settings.openai_api_key,
+        "ANTHROPIC_API_KEY": settings.anthropic_api_key,
+        "GROQ_API_KEY": settings.groq_api_key,
+        "XAI_API_KEY": settings.xai_api_key,
+        "GEMINI_API_KEY": settings.gemini_api_key,
+        "GOOGLE_API_KEY": settings.gemini_api_key,
+    }
+    for env_name, value in mapping.items():
+        if value and not os.environ.get(env_name):
+            os.environ[env_name] = value
 
 
 def model_for_tier(tier: ModelTier, settings: Settings) -> str:
@@ -81,6 +98,7 @@ def complete(
     if not llm_available(settings):
         return None
 
+    _apply_llm_credentials(settings)
     log = logging.getLogger("go_agent")
     model = model_for_tier(tier, settings)
     transport = get_completion_transport()

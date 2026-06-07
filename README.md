@@ -2,8 +2,6 @@
 
 `go-agent` is an agentic pipeline for approved Go open source repositories. Given a GitHub issue, it clones the repo, builds context, plans a fix, generates patches, runs tests and lint in a closed loop, reviews the change, and writes a PR summary (optionally opening a draft PR). Each run stores reproducible artifacts under `artifacts/{run_id}/`.
 
-For a step-by-step record of what was built, see [IMPLEMENTATION_CONTEXT.md](IMPLEMENTATION_CONTEXT.md).
-
 ## Approved repositories
 
 Only these four targets are allowed. Each has a repo skill under `skills/`; unknown repos fall back to [`skills/_default/SKILL.md`](skills/_default/SKILL.md).
@@ -124,7 +122,7 @@ go-agent run --repo <owner/name> --issue <N> [options]
 | `--rag` | Enable semantic retrieval for context |
 | `--patch-file` | Apply an existing patch instead of LLM coding |
 
-The CLI clones the repo, fetches the issue, builds scope and context, creates branch `agent/issue-{N}-{slug}`, then runs the LangGraph closed loop. Outputs land in `artifacts/{run_id}/` (see [IMPLEMENTATION_CONTEXT.md](IMPLEMENTATION_CONTEXT.md#artifacts-per-run) for the full file list).
+The CLI clones the repo, fetches the issue, builds scope and context, creates branch `agent/issue-{N}-{slug}`, then runs the LangGraph closed loop. Outputs land in `artifacts/{run_id}/`.
 
 Key artifacts: `plan.json`, `proposed.patch`, `test_result.json`, `lint_result.json`, `review.json`, `PR.md`.
 
@@ -178,7 +176,7 @@ flowchart LR
   fast --> patch
 ```
 
-**Full design:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (LangGraph routing, repo skills, optional MCP and memory, risk controls).
+**Full design:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 
 ## Repository layout
 
@@ -192,7 +190,6 @@ pocket-fm-assignment/
   skills/                # Per-repo SKILL.md + _default
   docs/
     ARCHITECTURE.md
-    GITHUB_ISSUES.md
   tests/
   artifacts/             # Run outputs (gitignored)
   workspaces/            # Cloned repos (gitignored)
@@ -208,7 +205,6 @@ pocket-fm-assignment/
 - Work stays isolated under `workspaces/{run_id}/`. The tool does not force-push to upstream default branches.
 - Full `golangci-lint` test suites can be slow, especially on `golangci/golangci-lint`.
 - RAG and Mem0 are optional extras. The core path does not require them.
-- MCP server integration is described in ARCHITECTURE.md but is not part of the default CLI yet.
 
 ## Cost and token notes
 
@@ -234,8 +230,6 @@ For a typical single-file fix on gin with one fix cycle, expect on the order of 
 ```bash
 pytest -q && ruff check src tests
 ```
-
-The project currently has about 261 tests. Implementation history and artifact schemas live in [IMPLEMENTATION_CONTEXT.md](IMPLEMENTATION_CONTEXT.md). The backlog of GitHub issues is in [docs/GITHUB_ISSUES.md](docs/GITHUB_ISSUES.md).
 
 ## License
 

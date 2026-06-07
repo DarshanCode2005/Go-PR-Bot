@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from collections.abc import Callable
 from typing import Any
 from unittest.mock import patch
@@ -9,7 +10,7 @@ from unittest.mock import patch
 import pytest
 
 from go_agent.config import Settings, clear_settings_cache
-from go_agent.llm_client import complete, get_completion_transport, set_completion_transport
+from go_agent.llm_client import complete, get_completion_transport, llm_available, set_completion_transport
 
 
 class RecordingTransport:
@@ -72,8 +73,28 @@ def test_complete_uses_strong_model(monkeypatch):
     assert transport.calls[0]["model"] == settings.model_strong
 
 
-def test_complete_returns_none_without_api_keys():
-    settings = Settings(openai_api_key=None, anthropic_api_key=None)
+def _clear_llm_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    for key in (
+        "OPENAI_API_KEY",
+        "ANTHROPIC_API_KEY",
+        "GROQ_API_KEY",
+        "XAI_API_KEY",
+        "GEMINI_API_KEY",
+        "GOOGLE_API_KEY",
+    ):
+        monkeypatch.delenv(key, raising=False)
+
+
+def test_complete_returns_none_without_api_keys(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    _clear_llm_env(monkeypatch)
+    settings = Settings(
+        openai_api_key=None,
+        anthropic_api_key=None,
+        groq_api_key=None,
+        xai_api_key=None,
+        gemini_api_key=None,
+    )
     transport = RecordingTransport(["ok"])
     set_completion_transport(transport)
 
@@ -81,6 +102,38 @@ def test_complete_returns_none_without_api_keys():
 
     assert out is None
     assert not transport.calls
+
+
+def test_llm_available_with_gemini_key(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("GEMINI_API_KEY", "gemini-test-key")
+    settings = Settings(
+        openai_api_key=None,
+        anthropic_api_key=None,
+        groq_api_key=None,
+        xai_api_key=None,
+    )
+    assert llm_available(settings) is True
+    assert settings.gemini_api_key == "gemini-test-key"
+
+
+def test_apply_llm_credentials_sets_gemini_env(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    _clear_llm_env(monkeypatch)
+    settings = Settings(
+        openai_api_key=None,
+        anthropic_api_key=None,
+        groq_api_key=None,
+        xai_api_key=None,
+        gemini_api_key="gemini-test-key",
+    )
+    transport = RecordingTransport(["ok"])
+    set_completion_transport(transport)
+
+    complete([{"role": "user", "content": "hello"}], settings=settings)
+
+    assert os.environ.get("GEMINI_API_KEY") == "gemini-test-key"
+    assert os.environ.get("GOOGLE_API_KEY") == "gemini-test-key"
 
 
 def test_complete_retries_on_rate_limit(monkeypatch):

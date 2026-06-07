@@ -172,7 +172,13 @@ def _initial_tier(index: int, settings: Settings) -> ContentTier:
     if index < settings.context_full_file_top_k:
         return "full"
     if index < settings.context_full_file_top_k + settings.context_summary_top_k:
-        if settings.openai_api_key or settings.anthropic_api_key:
+        if (
+            settings.openai_api_key
+            or settings.anthropic_api_key
+            or settings.groq_api_key
+            or settings.xai_api_key
+            or settings.gemini_api_key
+        ):
             return "summary"
         return "snippet"
     return "snippet"

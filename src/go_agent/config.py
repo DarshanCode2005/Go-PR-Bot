@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 from pathlib import Path
-from pydantic import Field, field_validator
+from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _VALID_LOG_LEVELS = frozenset({"DEBUG", "INFO", "WARNING", "ERROR"})
@@ -18,6 +18,7 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         extra="ignore",
+        populate_by_name=True,
     )
 
     work_dir: Path = Path("./workspaces")
@@ -56,6 +57,10 @@ class Settings(BaseSettings):
     anthropic_api_key: str | None = Field(default=None, validation_alias="ANTHROPIC_API_KEY")
     groq_api_key: str | None = Field(default=None, validation_alias="GROQ_API_KEY")
     xai_api_key: str | None = Field(default=None, validation_alias="XAI_API_KEY")
+    gemini_api_key: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("GEMINI_API_KEY", "GOOGLE_API_KEY"),
+    )
     github_token: str | None = Field(default=None, validation_alias="GITHUB_TOKEN")
     model_fast: str = "gpt-4o-mini"
     model_strong: str = "gpt-4o"
