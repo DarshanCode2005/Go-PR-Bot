@@ -107,6 +107,10 @@ def _best_hit_for_path(path: str, hits: list[SearchHit]) -> SearchHit | None:
     return path_hits[0]
 
 
+def read_file_lines(repo_path: Path, path: str) -> list[str]:
+    return _read_file_lines(repo_path, path)
+
+
 def _read_file_lines(repo_path: Path, path: str) -> list[str]:
     try:
         return (repo_path / path).read_text(encoding="utf-8").splitlines()
@@ -300,6 +304,7 @@ __all__ = [
     "ContextBundle",
     "ContextFileEntry",
     "prepare_scope",
+    "read_file_lines",
     "write_code_graph",
     "write_context_bundle",
     "write_scope_hints",

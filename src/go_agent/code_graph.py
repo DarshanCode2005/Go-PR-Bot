@@ -224,6 +224,14 @@ def write_code_graph(ctx: RunContext, graph: CodeGraph) -> Path:
     return path
 
 
+def load_code_graph_from_artifact(ctx: RunContext) -> CodeGraph | None:
+    """Load a persisted code graph from the run artifact directory."""
+    path = ctx.artifact_dir / "code_graph.json"
+    if not path.is_file():
+        return None
+    return CodeGraph.model_validate_json(path.read_text(encoding="utf-8"))
+
+
 def neighbors(graph: CodeGraph, node_id: str) -> list[tuple[str, str]]:
     """Return (neighbor_id, edge_kind) pairs for undirected traversal."""
     out: list[tuple[str, str]] = []

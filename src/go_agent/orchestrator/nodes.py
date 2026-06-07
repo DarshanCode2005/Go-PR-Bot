@@ -4,6 +4,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from go_agent.code_graph import load_code_graph_from_artifact
+from go_agent.context_refresh import (
+    refresh_context_with_graph_fallback,
+    write_context_bundle_refresh,
+)
 from go_agent.coder import build_proposed_patch, write_coder_artifact
 from go_agent.config import get_settings
 from go_agent.fixer import (
@@ -271,6 +276,30 @@ def fix_node(state: AgentState) -> AgentState:
             fix_context.failure_source,
         )
 
+    if settings.context_refresh_on_fix:
+        combined_output = fix_context.test_output + "\n" + fix_context.lint_output
+        graph = load_code_graph_from_artifact(ctx)
+        bundle, refresh_record = refresh_context_with_graph_fallback(
+            repo_path=repo_path,
+            existing_bundle=bundle,
+            failure_output=combined_output,
+            lint_findings=fix_context.lint_findings,
+            scope_hints=state.get("scope_hints", []),
+            settings=settings,
+            graph=graph,
+            iteration=fix_context.iteration,
+            failure_source=fix_context.failure_source,
+            logger=logger,
+        )
+        write_context_bundle_refresh(ctx, refresh_record)
+        logger.info(
+            "Context refresh iter %d: +%d paths, %d→%d chars",
+            refresh_record.iteration,
+            len(refresh_record.added_paths),
+            refresh_record.total_chars_before,
+            refresh_record.total_chars_after,
+        )
+
     patch_result = build_corrective_patch(
         repo_path,
         issue,
@@ -317,6 +346,7 @@ def fix_node(state: AgentState) -> AgentState:
         "last_node": "fix",
         "iteration": fix_context.iteration,
         "fix_plan": plan.model_copy(update={"files": expansion.target_files}).model_dump(),
+        "context_bundle": bundle.model_dump(),
     }
     if fix_context.failure_source == "review":
         result["review_round"] = fix_context.review_round
