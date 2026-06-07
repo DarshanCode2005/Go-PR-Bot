@@ -2,15 +2,18 @@
 
 from __future__ import annotations
 
+import json
 import logging
+import re
 from pathlib import Path
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from go_agent.config import Settings
-from go_agent.context_builder import ContextBundle
+from go_agent.context_builder import ContextBundle, SearchArtifact
 from go_agent.github_issues import IssueContext
 from go_agent.llm_client import complete, llm_available
+from go_agent.repo_search import SearchHit
 from go_agent.run_context import RunContext
 from go_agent.skills import format_skill_prompt
 from go_agent.utils import normalize_file_path
@@ -25,11 +28,25 @@ Return JSON only (no markdown fences) with exactly these keys:
 - file_dependencies: optional map of file path -> list of paths that file depends on
   (e.g. {"pkg/bar.go": ["pkg/foo.go"]} when bar must be coded after foo). Omit or {} if independent.
 
+When the issue describes behavior changes, validation semantics, bug fixes, or API edge cases:
+- Include relevant *_test.go files in files OR name specific tests in acceptance_criteria
+  (e.g. "TestUnixAddrValidation passes")
+- Reference known tests from context in steps (read test expectations before editing production code)
+- Prefer fixing production code to match existing tests unless the issue explicitly asks to change tests
+- Do not list test files for pure refactors or docs with no behavior impact
+
 Be specific to the issue and supplied code context. Prefer the smallest correct change."""
 
 _MAX_ISSUE_BODY_CHARS = 3000
 _MAX_BUNDLE_ENTRY_CHARS = 2000
 _DEFAULT_MAX_CONTEXT_CHARS = 12000
+_TEST_FUNC_RE = re.compile(r"func\s+(Test\w+)\s*\(")
+_BEHAVIOR_CHANGE_RE = re.compile(
+    r"\b(valid(?:ation|ate)?|bug|fail(?:ure|s|ed)?|incorrect|edge\s*case|"
+    r"panic|regression|broken|unexpected|should\s+not|does\s+not\s+work)\b",
+    re.I,
+)
+_TEST_AWARENESS_ERROR_MARKER = "Behavior-change issue requires"
 
 
 class PlanError(RuntimeError):
@@ -159,6 +176,123 @@ def _bundle_excerpt(context_bundle: ContextBundle, *, max_chars: int) -> str:
     return "\n".join(parts)
 
 
+def _issue_implies_behavior_change(issue: IssueContext) -> bool:
+    text = f"{issue.title}\n{issue.body}"
+    return bool(_BEHAVIOR_CHANGE_RE.search(text))
+
+
+def _extract_known_tests(
+    context_bundle: ContextBundle,
+    search_hits: list[SearchHit] | None = None,
+) -> list[tuple[str, str]]:
+    """Return (test_name, file_path) pairs found in bundle snippets or search hits."""
+    seen: set[tuple[str, str]] = set()
+    ordered: list[tuple[str, str]] = []
+
+    def add(name: str, path: str) -> None:
+        key = (name, path)
+        if key not in seen:
+            seen.add(key)
+            ordered.append(key)
+
+    bundle_has_test_file = False
+    for entry in context_bundle.files:
+        for match in _TEST_FUNC_RE.finditer(entry.content):
+            add(match.group(1), entry.path)
+        if normalize_file_path(entry.path).endswith("_test.go"):
+            bundle_has_test_file = True
+
+    if not bundle_has_test_file and search_hits:
+        for hit in search_hits:
+            if not normalize_file_path(hit.path).endswith("_test.go"):
+                continue
+            for match in _TEST_FUNC_RE.finditer(hit.line_text):
+                add(match.group(1), hit.path)
+
+    return ordered
+
+
+def _format_known_tests_section(
+    context_bundle: ContextBundle,
+    search_hits: list[SearchHit] | None = None,
+) -> str | None:
+    known = _extract_known_tests(context_bundle, search_hits)
+    if not known:
+        return None
+    lines = ["Known tests in context:"]
+    lines.extend(f"- {name} ({path})" for name, path in known)
+    return "\n".join(lines)
+
+
+def _plan_has_test_awareness(payload: dict) -> bool:
+    files = payload.get("files") or []
+    if any(str(item).endswith("_test.go") for item in files):
+        return True
+    criteria = payload.get("acceptance_criteria") or []
+    return any(re.search(r"\bTest[A-Z]\w*", str(item)) for item in criteria)
+
+
+def _validate_test_awareness(
+    payload: dict,
+    issue: IssueContext,
+    *,
+    context_bundle: ContextBundle | None = None,
+    search_hits: list[SearchHit] | None = None,
+) -> None:
+    if not _issue_implies_behavior_change(issue):
+        return
+    if _plan_has_test_awareness(payload):
+        return
+    known = (
+        _extract_known_tests(context_bundle, search_hits)
+        if context_bundle is not None
+        else []
+    )
+    hint = ""
+    if known:
+        hint = (
+            f" Include *_test.go (e.g. {known[0][1]}) "
+            "or name tests in acceptance_criteria."
+        )
+    msg = (
+        "Behavior-change issue requires *_test.go in files "
+        "or Test* names in acceptance_criteria."
+        + hint
+    )
+    raise PlanError(msg)
+
+
+def load_search_hits_from_artifact(artifact_dir: Path) -> list[SearchHit]:
+    """Load search hits written during scope preparation."""
+    path = artifact_dir / "search_hits.json"
+    if not path.is_file():
+        return []
+    try:
+        artifact = SearchArtifact.model_validate_json(path.read_text(encoding="utf-8"))
+    except Exception:
+        return []
+    return list(artifact.hits)
+
+
+def _build_test_awareness_correction(
+    error: PlanError,
+    context_bundle: ContextBundle,
+    search_hits: list[SearchHit] | None,
+) -> str:
+    known = _extract_known_tests(context_bundle, search_hits)
+    known_lines = "\n".join(f"- {name} ({path})" for name, path in known)
+    known_block = f"\nKnown tests in context:\n{known_lines}" if known_lines else ""
+    return (
+        f"Previous output was invalid: {error}. "
+        "This issue changes behavior or validation. Include relevant *_test.go in files "
+        "OR list specific test names (Test*) in acceptance_criteria. "
+        "Read test expectations before editing production code."
+        f"{known_block}\n"
+        "Return valid JSON only with keys files, steps, test_commands, "
+        "acceptance_criteria, and optional file_dependencies."
+    )
+
+
 def build_planner_messages(
     issue: IssueContext,
     context_bundle: ContextBundle,
@@ -166,9 +300,10 @@ def build_planner_messages(
     *,
     max_context_chars: int = _DEFAULT_MAX_CONTEXT_CHARS,
     correction: str | None = None,
+    search_hits: list[SearchHit] | None = None,
 ) -> list[dict[str, str]]:
     """Build system + user messages for the planner LLM call."""
-    skill_section = format_skill_prompt(issue.repo)
+    skill_section = format_skill_prompt(issue.repo, stage="planner")
     hints_text = ", ".join(scope_hints[:30]) or "(none)"
     bundle_text = _bundle_excerpt(context_bundle, max_chars=max_context_chars)
     body = issue.body[:_MAX_ISSUE_BODY_CHARS].strip()
@@ -180,6 +315,9 @@ def build_planner_messages(
         f"Scope hints: {hints_text}",
         f"Context bundle ({len(context_bundle.files)} files):\n{bundle_text or '(empty)'}",
     ]
+    known_tests = _format_known_tests_section(context_bundle, search_hits)
+    if known_tests:
+        user_parts.append(known_tests)
     if skill_section:
         user_parts.append(skill_section)
     if correction:
@@ -198,8 +336,6 @@ def _parse_plan_json(content: str) -> dict:
         msg = "LLM response did not contain a JSON object"
         raise PlanError(msg)
     try:
-        import json
-
         payload = json.loads(content[start : end + 1])
     except Exception as exc:
         msg = f"LLM response is not valid JSON: {exc}"
@@ -298,11 +434,18 @@ def _request_plan(
     *,
     context_bundle: ContextBundle | None = None,
     repo_path: Path | None = None,
+    search_hits: list[SearchHit] | None = None,
 ) -> FixPlan:
     content = complete(messages, tier="strong", settings=settings)
     if not content:
         raise PlanError("LLM completion failed")
     payload = _parse_plan_json(content)
+    _validate_test_awareness(
+        payload,
+        issue,
+        context_bundle=context_bundle,
+        search_hits=search_hits,
+    )
     if context_bundle is not None:
         payload = enrich_fix_plan_payload(
             payload,
@@ -320,13 +463,19 @@ def build_fix_plan(
     logger: logging.Logger | None = None,
     *,
     repo_path: Path | None = None,
+    search_hits: list[SearchHit] | None = None,
 ) -> FixPlan:
     """Build and validate a structured fix plan; raises PlanError on failure."""
     log = logger or logging.getLogger("go_agent")
     if not llm_available(settings):
         raise PlanError("LLM API key required for planner")
 
-    messages = build_planner_messages(issue, context_bundle, scope_hints)
+    messages = build_planner_messages(
+        issue,
+        context_bundle,
+        scope_hints,
+        search_hits=search_hits,
+    )
     try:
         plan = _request_plan(
             issue,
@@ -334,6 +483,7 @@ def build_fix_plan(
             settings,
             context_bundle=context_bundle,
             repo_path=repo_path,
+            search_hits=search_hits,
         )
         log.info(
             "Fix plan built: %d files, %d steps",
@@ -343,15 +493,24 @@ def build_fix_plan(
         return plan
     except PlanError as first_error:
         log.warning("Planner first attempt failed: %s", first_error)
+        if _TEST_AWARENESS_ERROR_MARKER in str(first_error):
+            correction = _build_test_awareness_correction(
+                first_error,
+                context_bundle,
+                search_hits,
+            )
+        else:
+            correction = (
+                f"Previous output was invalid: {first_error}. "
+                "Return valid JSON only with keys files, steps, test_commands, "
+                "acceptance_criteria, and optional file_dependencies."
+            )
         retry_messages = build_planner_messages(
             issue,
             context_bundle,
             scope_hints,
-            correction=(
-                f"Previous output was invalid: {first_error}. "
-                "Return valid JSON only with keys files, steps, test_commands, "
-                "acceptance_criteria, and optional file_dependencies."
-            ),
+            correction=correction,
+            search_hits=search_hits,
         )
         try:
             plan = _request_plan(
@@ -360,6 +519,7 @@ def build_fix_plan(
                 settings,
                 context_bundle=context_bundle,
                 repo_path=repo_path,
+                search_hits=search_hits,
             )
             log.info("Fix plan built on retry")
             return plan

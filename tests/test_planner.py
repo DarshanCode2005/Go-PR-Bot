@@ -20,7 +20,7 @@ VALID_PLAN_JSON = (
     '{"files":["context.go"],'
     '"steps":["Add nil guard in BindJSON"],'
     '"test_commands":["go test ./... -count=1"],'
-    '"acceptance_criteria":["BindJSON handles nil context without panic"]}'
+    '"acceptance_criteria":["TestBindJSON handles nil context without panic"]}'
 )
 
 
@@ -114,8 +114,15 @@ def test_fix_plan_model_validates_required_fields():
 def test_build_fix_plan_requires_api_key():
     issue = _issue()
     bundle = _bundle()
+    settings = Settings(
+        openai_api_key=None,
+        anthropic_api_key=None,
+        groq_api_key=None,
+        gemini_api_key=None,
+        xai_api_key=None,
+    )
     with pytest.raises(PlanError, match="API key"):
-        build_fix_plan(issue, bundle, ["BindJSON"], Settings())
+        build_fix_plan(issue, bundle, ["BindJSON"], settings)
 
 
 def test_build_fix_plan_parses_valid_json(monkeypatch):
@@ -282,7 +289,7 @@ def test_build_fix_plan_sanitizes_invalid_dependencies_without_retry(monkeypatch
             '{"files":["baked_in.go"],'
             '"steps":["Fix unix_addr"],'
             '"test_commands":["go test -run TestUnixAddrValidation -count=1"],'
-            '"acceptance_criteria":["Tests pass"],'
+            '"acceptance_criteria":["TestUnixAddrValidation passes"],'
             '"file_dependencies":{"validator.go":["baked_in.go"]}}'
         ]
     )
@@ -290,8 +297,8 @@ def test_build_fix_plan_sanitizes_invalid_dependencies_without_retry(monkeypatch
     issue = IssueContext(
         repo="go-playground/validator",
         number=32,
-        title="unix_addr validation",
-        body="Fix unix_addr",
+        title="Adjust baked_in file dependencies",
+        body="Reorder dependency metadata only.",
         state="open",
     )
     plan = build_fix_plan(issue, _bundle(), ["unix_addr"], Settings())
