@@ -44,7 +44,7 @@ def _plan() -> FixPlan:
 
 
 def test_resolve_test_commands_uses_plan_by_default():
-    commands, source = resolve_test_commands(_plan(), "golangci/golangci-lint")
+    commands, source = resolve_test_commands(_plan(), "example/other")
     assert source == "plan"
     assert commands == ["go test ./pkg/... -count=1"]
 

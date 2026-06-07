@@ -30,7 +30,7 @@ lint_commands:
 def test_resolve_lint_commands_default_vet_only(tmp_path):
     repo_path = tmp_path / "repo"
     repo_path.mkdir()
-    commands, source = resolve_lint_commands("golangci/golangci-lint", repo_path)
+    commands, source = resolve_lint_commands("example/other", repo_path)
     assert source == "default"
     assert commands == ["go vet ./..."]
 
@@ -47,7 +47,7 @@ def test_resolve_lint_commands_includes_golangci_when_config_and_binary(
     (repo_path / config_name).write_text("run:\n  timeout: 5m\n", encoding="utf-8")
 
     with patch("go_agent.skills.shutil.which", return_value="/usr/bin/golangci-lint"):
-        commands, source = resolve_lint_commands("golangci/golangci-lint", repo_path)
+        commands, source = resolve_lint_commands("example/other", repo_path)
 
     assert source == "default"
     assert commands == ["go vet ./...", "golangci-lint run"]
