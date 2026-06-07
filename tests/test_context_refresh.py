@@ -323,6 +323,72 @@ def test_budget_enforcement(tmp_path):
     assert _entry_for(refreshed, "validator_test.go").content_tier == "full"
 
 
+def test_budget_enforcement_multiple_force_full_files(tmp_path, caplog):
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    (repo_path / "foo_test.go").write_text("a" * 300, encoding="utf-8")
+    (repo_path / "bar_test.go").write_text("b" * 300, encoding="utf-8")
+
+    failure_output = (
+        "--- FAIL: TestFoo (0.00s)\n"
+        "    foo_test.go:1: fail\n"
+        "--- FAIL: TestBar (0.00s)\n"
+        "    bar_test.go:1: fail\n"
+        "FAIL\n"
+    )
+    existing = ContextBundle(
+        issue_number=1,
+        repo="example/repo",
+        budget_chars=500,
+        total_chars=0,
+        files=[],
+    )
+
+    def fake_search(repo_path, query, settings, **kwargs):
+        hits = []
+        if query == "func TestFoo":
+            hits = [
+                SearchHit(
+                    path="foo_test.go",
+                    line_number=1,
+                    line_text="func TestFoo(t *testing.T) {}",
+                    query=query,
+                )
+            ]
+        elif query == "func TestBar":
+            hits = [
+                SearchHit(
+                    path="bar_test.go",
+                    line_number=1,
+                    line_text="func TestBar(t *testing.T) {}",
+                    query=query,
+                )
+            ]
+        return SearchResponse(query=query, glob=kwargs.get("glob"), hits=hits, truncated=False)
+
+    settings = Settings(context_max_chars=500, context_max_files=5)
+
+    with caplog.at_level("WARNING"):
+        with patch("go_agent.failure_parse.search_repo", side_effect=fake_search):
+            with patch("go_agent.context_refresh.search_repo", side_effect=fake_search):
+                refreshed, _ = refresh_context_for_failure(
+                    repo_path=repo_path,
+                    existing_bundle=existing,
+                    failure_output=failure_output,
+                    lint_findings=[],
+                    scope_hints=[],
+                    settings=settings,
+                    graph=_empty_graph(),
+                    iteration=1,
+                    failure_source="test",
+                )
+
+    assert refreshed.total_chars <= settings.context_max_chars
+    assert _entry_for(refreshed, "foo_test.go") is not None
+    assert _entry_for(refreshed, "bar_test.go") is not None
+    assert any("collectively exceed context budget" in record.message for record in caplog.records)
+
+
 def test_refresh_record_artifact_fields(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     ctx = create_run_context()

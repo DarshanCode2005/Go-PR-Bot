@@ -297,7 +297,33 @@ def _enforce_merged_budget(
             break
 
         if not changed:
-            break
+            total = sum(item.char_count for item in result)
+            if total <= budget:
+                break
+            truncated = False
+            for index in range(len(result) - 1, -1, -1):
+                if normalize_file_path(result[index].path) not in force_full_norm:
+                    continue
+                excess = total - budget
+                new_len = max(0, result[index].char_count - excess)
+                if new_len >= result[index].char_count:
+                    continue
+                logger.warning(
+                    "Force-full files collectively exceed context budget (%d > %d); "
+                    "truncating %s",
+                    total,
+                    budget,
+                    result[index].path,
+                )
+                content = result[index].content[:new_len]
+                result[index] = result[index].model_copy(
+                    update={"content": content, "char_count": len(content)},
+                )
+                truncated = True
+                break
+            if not truncated:
+                break
+            continue
 
     return result
 
