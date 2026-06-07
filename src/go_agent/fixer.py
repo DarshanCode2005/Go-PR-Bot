@@ -32,6 +32,7 @@ from go_agent.utils import normalize_file_path
 _GO_FILE = re.compile(r"(?:\./)?([\w./-]+\.go)")
 _FAIL_TEST = re.compile(r"--- FAIL:\s+(\w+)", re.MULTILINE)
 _FAIL_TEST_ALT = re.compile(r"^\s*FAIL:\s+(\w+)", re.MULTILINE)
+_FAIL_PACKAGE = re.compile(r"^FAIL\t(\S+)", re.MULTILINE)
 _FILE_LINE = re.compile(r"([\w./-]+\.go):(\d+)", re.MULTILINE)
 
 FIXER_SYSTEM_PROMPT = """You are a Go fix agent correcting code after test or lint failures.
@@ -110,6 +111,18 @@ def parse_failing_tests(test_output: str) -> list[str]:
                 seen.add(name)
                 names.append(name)
     return names
+
+
+def parse_failing_packages(test_output: str) -> list[str]:
+    """Extract import paths from go test summary lines (FAIL\\tpath)."""
+    packages: list[str] = []
+    seen: set[str] = set()
+    for match in _FAIL_PACKAGE.finditer(test_output):
+        path = match.group(1)
+        if path not in seen:
+            seen.add(path)
+            packages.append(path)
+    return packages
 
 
 def parse_referenced_go_files(output: str) -> list[str]:
@@ -534,6 +547,7 @@ __all__ = [
     "build_failure_context",
     "build_review_fix_context",
     "expand_fix_files",
+    "parse_failing_packages",
     "parse_failing_tests",
     "parse_referenced_go_files",
     "resolve_test_files",

@@ -122,6 +122,9 @@ def test_run_test_commands_success(tmp_path):
     assert result.passed is True
     assert result.commands[0].exit_code == 0
     assert result.commands[0].stdout == "ok"
+    run_mock.assert_called_once()
+    assert run_mock.call_args.args[0] == ["echo", "ok"]
+    assert run_mock.call_args.kwargs["shell"] is False
 
 
 def test_run_test_commands_failure_captures_output(tmp_path):
@@ -168,9 +171,15 @@ def test_write_test_result_artifact(tmp_path, monkeypatch):
     result = TestRunResult(
         passed=True,
         resolved_commands=["go test ./..."],
+        command_argv=[["go", "test", "./..."]],
         source="plan",
         plan_commands=["go test ./..."],
+        mode="full",
+        scoped_from_failure=False,
     )
     path = write_test_result(ctx, result)
     assert path == ctx.artifact_dir / "test_result.json"
     assert path.exists()
+    payload = path.read_text(encoding="utf-8")
+    assert '"mode": "full"' in payload
+    assert '"command_argv"' in payload

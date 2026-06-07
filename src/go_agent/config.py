@@ -52,6 +52,8 @@ class Settings(BaseSettings):
     integrator_max_merge_retries: int = 1
     test_timeout: int = 300
     lint_timeout: int = 120
+    scoped_test_enabled: bool = True
+    scoped_test_before_review_full: bool = True
 
     openai_api_key: str | None = Field(default=None, validation_alias="OPENAI_API_KEY")
     anthropic_api_key: str | None = Field(default=None, validation_alias="ANTHROPIC_API_KEY")

@@ -154,6 +154,9 @@ def test_node(state: AgentState) -> AgentState:
     issue = issue_from_state(state)
 
     iteration = state.get("iteration", 0)
+    prior = state.get("test_result") or {}
+    prior_failed = not prior.get("passed", True)
+    prior_output = prior.get("output", "") if prior_failed else None
     try:
         result = run_tests(
             repo_path,
@@ -163,6 +166,7 @@ def test_node(state: AgentState) -> AgentState:
             logger=logger,
             iteration=iteration,
             max_fix_iterations=settings.max_fix_iterations,
+            prior_test_output=prior_output,
         )
     except TestRunError as exc:
         if exc.result is not None:
@@ -181,10 +185,12 @@ def test_node(state: AgentState) -> AgentState:
         source=result.source,
     )
     logger.info(
-        "Tests %s (%d command(s), source=%s, iteration=%d)",
+        "Tests %s (%d command(s), source=%s, mode=%s, scoped_from_failure=%s, iteration=%d)",
         "passed" if result.passed else "failed",
         len(result.commands),
         result.source,
+        result.mode,
+        result.scoped_from_failure,
         state.get("iteration", 0),
     )
     return {
