@@ -156,9 +156,9 @@ High-level flow from issue to artifacts:
 ```mermaid
 flowchart TB
   cli[CLI setup clone context branch]
-  graph[LangGraph closed loop]
+  lgLoop[LangGraph closed loop]
   out[artifacts run_id]
-  cli --> graph --> out
+  cli --> lgLoop --> out
   subgraph graphNodes [Graph nodes]
     plan[plan] --> code[code] --> integrate[integrate]
     integrate --> test[test] --> lint[lint] --> review[review] --> pr[pr]
