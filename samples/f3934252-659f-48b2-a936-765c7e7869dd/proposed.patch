@@ -1,0 +1,13 @@
+diff --git a/baked_in.go b/baked_in.go
+index 41f6f27..d1e0465 100644
+--- a/baked_in.go
++++ b/baked_in.go
+@@ -2801,7 +2801,7 @@ func isUnixAddrResolvable(fl FieldLevel) bool {
+ 		return false
+ 	}
+ 
+-	return fileInfo.Mode().Type() == fs.ModeSocket
++	return !fileInfo.IsDir() && (fileInfo.Mode()&fs.ModeSocket) == fs.ModeSocket
+ }
+ 
+ // isUnixDomainSocketExists is the validation function for validating if the field's value is an existing Unix domain socket.

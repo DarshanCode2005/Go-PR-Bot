@@ -1,0 +1,22 @@
+{
+  "issue_number": 1348,
+  "repo": "go-playground/validator",
+  "files": [
+    "baked_in.go"
+  ],
+  "steps": [
+    "Replace the existing `isUnixAddrResolvable` function with a new implementation that checks if the provided Unix address is resolvable and if the file exists and is a socket.",
+    "Use the `os.Stat` function to check if the file exists and if it is a socket.",
+    "Use the `fs.ModeSocket` constant to check if the file mode is a socket."
+  ],
+  "test_commands": [
+    "go test -race ./... -count=1",
+    "go test -race -run TestUnixDomainSocketExistsValidation ./..."
+  ],
+  "acceptance_criteria": [
+    "The `isUnixAddrResolvable` function returns `true` if the provided Unix address is resolvable and the file exists and is a socket.",
+    "The `isUnixAddrResolvable` function returns `false` if the provided Unix address is not resolvable or the file does not exist or is not a socket.",
+    "The `TestUnixDomainSocketExistsValidation` test passes without errors."
+  ],
+  "file_dependencies": {}
+}

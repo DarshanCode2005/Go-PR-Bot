@@ -1,0 +1,15 @@
+{
+  "run_id": "f3934252-659f-48b2-a936-765c7e7869dd",
+  "repo": "go-playground/validator",
+  "issue_number": 1348,
+  "dry_run": true,
+  "create_pr": false,
+  "force": false,
+  "enable_rag": false,
+  "artifact_dir": "/home/darshan/master/pocket-fm-assignment/artifacts/f3934252-659f-48b2-a936-765c7e7869dd",
+  "repo_path": "/home/darshan/master/pocket-fm-assignment/workspaces/f3934252-659f-48b2-a936-765c7e7869dd/repo",
+  "workspace_dir": "/home/darshan/master/pocket-fm-assignment/workspaces/f3934252-659f-48b2-a936-765c7e7869dd",
+  "include_test": true,
+  "include_closed_loop": true,
+  "patch_file": null
+}

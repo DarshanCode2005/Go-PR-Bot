@@ -1,0 +1,21 @@
+{
+  "passed": false,
+  "commands": [
+    {
+      "command": "go test -race ./... -count=1",
+      "exit_code": 1,
+      "passed": false,
+      "stdout": "--- FAIL: TestUnixAddrValidation (0.00s)\n    validator_test.go:3048: Index: 0 unix_addr failed Error: Key: '' Error:Field validation for '' failed on the 'unix_addr' tag\nFAIL\nFAIL\tgithub.com/go-playground/validator/v10\t0.163s\nok  \tgithub.com/go-playground/validator/v10/non-standard/validators\t1.031s\nok  \tgithub.com/go-playground/validator/v10/translations/ar\t1.054s\nok  \tgithub.com/go-playground/validator/v10/translations/de\t1.057s\nok  \tgithub.com/go-playground/validator/v10/translations/en\t1.060s\nok  \tgithub.com/go-playground/validator/v10/translations/es\t1.040s\nok  \tgithub.com/go-playground/validator/v10/translations/fa\t1.052s\nok  \tgithub.com/go-playground/validator/v10/translations/fr\t1.048s\nok  \tgithub.com/go-playground/validator/v10/translations/id\t1.070s\nok  \tgithub.com/go-playground/validator/v10/translations/it\t1.051s\nok  \tgithub.com/go-playground/validator/v10/translations/ja\t1.051s\nok  \tgithub.com/go-playground/validator/v10/translations/ko\t1.057s\nok  \tgithub.com/go-playground/validator/v10/translations/lv\t1.050s\nok  \tgithub.com/go-playground/validator/v10/translations/nl\t1.022s\nok  \tgithub.com/go-playground/validator/v10/translations/pl\t1.024s\nok  \tgithub.com/go-playground/validator/v10/translations/pt\t1.017s\nok  \tgithub.com/go-playground/validator/v10/translations/pt_BR\t1.016s\nok  \tgithub.com/go-playground/validator/v10/translations/ru\t1.027s\nok  \tgithub.com/go-playground/validator/v10/translations/th\t1.028s\nok  \tgithub.com/go-playground/validator/v10/translations/tr\t1.027s\nok  \tgithub.com/go-playground/validator/v10/translations/uk\t1.028s\nok  \tgithub.com/go-playground/validator/v10/translations/vi\t1.027s\nok  \tgithub.com/go-playground/validator/v10/translations/zh\t1.021s\nok  \tgithub.com/go-playground/validator/v10/translations/zh_tw\t1.018s\nFAIL\n",
+      "stderr": "",
+      "duration_seconds": 3.206
+    }
+  ],
+  "resolved_commands": [
+    "go test -race ./... -count=1"
+  ],
+  "source": "skill_override",
+  "plan_commands": [
+    "go test -race ./... -count=1",
+    "go test -race -run TestUnixDomainSocketExistsValidation ./..."
+  ]
+}

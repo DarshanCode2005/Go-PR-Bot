@@ -1,0 +1,415 @@
+{
+  "issue_number": 1348,
+  "repo": "go-playground/validator",
+  "hits": [
+    {
+      "path": "./baked_in.go",
+      "line_number": 2798,
+      "line_text": "// isUnixDomainSocketExists is the validation function for validating if the field's value is an existing Unix domain socket.",
+      "query": "socket"
+    },
+    {
+      "path": "./baked_in.go",
+      "line_number": 2799,
+      "line_text": "// It handles both filesystem-based sockets and Linux abstract sockets.",
+      "query": "socket"
+    },
+    {
+      "path": "./baked_in.go",
+      "line_number": 2812,
+      "line_text": "\t// On Linux, check for abstract sockets (prefixed with @)",
+      "query": "socket"
+    },
+    {
+      "path": "./baked_in.go",
+      "line_number": 2817,
+      "line_text": "\t// For filesystem-based sockets, check if the path exists and is a socket",
+      "query": "socket"
+    },
+    {
+      "path": "./baked_in.go",
+      "line_number": 2826,
+      "line_text": "// isAbstractSocketExists checks if a Linux abstract socket exists by reading /proc/net/unix.",
+      "query": "socket"
+    },
+    {
+      "path": "./baked_in.go",
+      "line_number": 2827,
+      "line_text": "// Abstract sockets are identified by an @ prefix in human-readable form.",
+      "query": "socket"
+    },
+    {
+      "path": "./baked_in.go",
+      "line_number": 2844,
+      "line_text": "\t// Abstract sockets in /proc/net/unix are represented with @ prefix",
+      "query": "socket"
+    },
+    {
+      "path": "./baked_in.go",
+      "line_number": 2845,
+      "line_text": "\t// The socket path is the last field in each line",
+      "query": "socket"
+    },
+    {
+      "path": "./baked_in.go",
+      "line_number": 3004,
+      "line_text": "// isHostnamePort validates a <dns>:<port> combination for fields typically used for socket address.",
+      "query": "socket"
+    },
+    {
+      "path": "./doc.go",
+      "line_number": 1349,
+      "line_text": "# Unix domain socket end point Address",
+      "query": "socket"
+    },
+    {
+      "path": "./doc.go",
+      "line_number": 1357,
+      "line_text": "This validates that a Unix domain socket file exists at the specified path.",
+      "query": "socket"
+    },
+    {
+      "path": "./doc.go",
+      "line_number": 1358,
+      "line_text": "It checks both filesystem-based sockets and Linux abstract sockets (prefixed with @).",
+      "query": "socket"
+    },
+    {
+      "path": "./doc.go",
+      "line_number": 1359,
+      "line_text": "For filesystem sockets, it verifies the path exists and is a socket file.",
+      "query": "socket"
+    },
+    {
+      "path": "./doc.go",
+      "line_number": 1360,
+      "line_text": "For abstract sockets on Linux, it checks /proc/net/unix.",
+      "query": "socket"
+    },
+    {
+      "path": "./doc.go",
+      "line_number": 1434,
+      "line_text": "can be used to validate fields typically passed to sockets and connections.",
+      "query": "socket"
+    },
+    {
+      "path": "./validator_test.go",
+      "line_number": 3066,
+      "line_text": "\t\tt.Skip(\"Unix domain sockets are not supported on Windows\")",
+      "query": "socket"
+    },
+    {
+      "path": "./validator_test.go",
+      "line_number": 3088,
+      "line_text": "\t\t\tt.Fatalf(\"Failed to create test socket: %v\", err)",
+      "query": "socket"
+    },
+    {
+      "path": "./validator_test.go",
+      "line_number": 3128,
+      "line_text": "\tt.Run(\"abstract_sockets\", func(t *testing.T) {",
+      "query": "socket"
+    },
+    {
+      "path": "./validator_test.go",
+      "line_number": 3134,
+      "line_text": "\t\t\terrs := validate.Var(\"@nonexistent_abstract_socket\", \"uds_exists\")",
+      "query": "socket"
+    },
+    {
+      "path": "./validator_test.go",
+      "line_number": 3140,
+      "line_text": "\t\t\tabstractSockName := \"@test_abstract_socket_\" + fmt.Sprintf(\"%d\", time.Now().UnixNano())",
+      "query": "socket"
+    },
+    {
+      "path": "./validator_test.go",
+      "line_number": 3144,
+      "line_text": "\t\t\t\tt.Fatalf(\"Failed to create abstract socket: %v\", err)",
+      "query": "socket"
+    },
+    {
+      "path": "./doc.go",
+      "line_number": 1012,
+      "line_text": "\tUsage: filepath",
+      "query": "filepath"
+    },
+    {
+      "path": "./baked_in.go",
+      "line_number": 148,
+      "line_text": "\t\t\"filepath\":                      isFilePath,",
+      "query": "filepath"
+    },
+    {
+      "path": "./baked_in.go",
+      "line_number": 1844,
+      "line_text": "\t// It does not exist but may still be a valid filepath.",
+      "query": "filepath"
+    },
+    {
+      "path": "./baked_in.go",
+      "line_number": 1861,
+      "line_text": "\t\t\t\t\t// It's definitely an invalid character in the filepath.",
+      "query": "filepath"
+    },
+    {
+      "path": "./validator_test.go",
+      "line_number": 17,
+      "line_text": "\t\"path/filepath\"",
+      "query": "filepath"
+    },
+    {
+      "path": "./validator_test.go",
+      "line_number": 6216,
+      "line_text": "\t\t{\"regular file\", filepath.Join(\"testdata\", \"a.go\"), true},",
+      "query": "filepath"
+    },
+    {
+      "path": "./validator_test.go",
+      "line_number": 6217,
+      "line_text": "\t\t{\"missing file\", filepath.Join(\"testdata\", \"no.go\"), false},",
+      "query": "filepath"
+    },
+    {
+      "path": "./validator_test.go",
+      "line_number": 6248,
+      "line_text": "\t\t\"missing\":   filepath.Join(tmpDir, \"none.png\"),",
+      "query": "filepath"
+    },
+    {
+      "path": "./validator_test.go",
+      "line_number": 6249,
+      "line_text": "\t\t\"png\":       filepath.Join(tmpDir, \"image.png\"),",
+      "query": "filepath"
+    },
+    {
+      "path": "./validator_test.go",
+      "line_number": 6250,
+      "line_text": "\t\t\"jpeg\":      filepath.Join(tmpDir, \"image.jpg\"),",
+      "query": "filepath"
+    },
+    {
+      "path": "./validator_test.go",
+      "line_number": 6251,
+      "line_text": "\t\t\"mp3\":       filepath.Join(tmpDir, \"music.mp3\"),",
+      "query": "filepath"
+    },
+    {
+      "path": "./validator_test.go",
+      "line_number": 6360,
+      "line_text": "\t\t\"missing\":   filepath.Join(tmpDir, \"none.png\"),",
+      "query": "filepath"
+    },
+    {
+      "path": "./validator_test.go",
+      "line_number": 6361,
+      "line_text": "\t\t\"png\":       filepath.Join(tmpDir, \"image.png\"),",
+      "query": "filepath"
+    },
+    {
+      "path": "./validator_test.go",
+      "line_number": 6362,
+      "line_text": "\t\t\"jpeg\":      filepath.Join(tmpDir, \"image.jpg\"),",
+      "query": "filepath"
+    },
+    {
+      "path": "./validator_test.go",
+      "line_number": 6363,
+      "line_text": "\t\t\"go\":        filepath.Join(\"testdata\", \"a.go\"),",
+      "query": "filepath"
+    },
+    {
+      "path": "./validator_test.go",
+      "line_number": 6507,
+      "line_text": "\t\t{\"empty filepath\", \"\", false},",
+      "query": "filepath"
+    },
+    {
+      "path": "./validator_test.go",
+      "line_number": 6508,
+      "line_text": "\t\t{\"valid filepath\", filepath.Join(\"testdata\", \"a.go\"), true},",
+      "query": "filepath"
+    },
+    {
+      "path": "./validator_test.go",
+      "line_number": 6509,
+      "line_text": "\t\t{\"invalid filepath\", filepath.Join(\"testdata\", \"no\\000.go\"), false},",
+      "query": "filepath"
+    },
+    {
+      "path": "./validator_test.go",
+      "line_number": 6510,
+      "line_text": "\t\t{\"directory, not a filepath\", \"testdata\" + string(os.PathSeparator), false},",
+      "query": "filepath"
+    },
+    {
+      "path": "./validator_test.go",
+      "line_number": 6515,
+      "line_text": "\t\terrs := validate.Var(test.param, \"filepath\")",
+      "query": "filepath"
+    },
+    {
+      "path": "./validator_test.go",
+      "line_number": 6529,
+      "line_text": "\t\t_ = validate.Var(6, \"filepath\")",
+      "query": "filepath"
+    },
+    {
+      "path": "./validator_test.go",
+      "line_number": 11889,
+      "line_text": "\t\t{\"a file not a directory\", filepath.Join(\"testdata\", \"a.go\"), false},",
+      "query": "filepath"
+    },
+    {
+      "path": "./validator_test.go",
+      "line_number": 11923,
+      "line_text": "\t\t{\"file, not a dirpath\", filepath.Join(\"testdata\", \"a.go\"), false},",
+      "query": "filepath"
+    },
+    {
+      "path": "./validator_test.go",
+      "line_number": 11941,
+      "line_text": "\t\t_ = validate.Var(6, \"filepath\")",
+      "query": "filepath"
+    },
+    {
+      "path": "./translations/id/id_test.go",
+      "line_number": 1150,
+      "line_text": "\t\tFilePath           string   `validate:\"filepath\"`",
+      "query": "filepath"
+    },
+    {
+      "path": "./translations/id/id.go",
+      "line_number": 1181,
+      "line_text": "\t\t\ttag:         \"filepath\",",
+      "query": "filepath"
+    },
+    {
+      "path": "./validator_test.go",
+      "line_number": 15032,
+      "line_text": "\t\t// Object types follow the same rules as permissions for the type name plus an optional prefix up to 63 characters with a /",
+      "query": "optional"
+    },
+    {
+      "path": "./doc.go",
+      "line_number": 1362,
+      "line_text": "\tUsage: uds_exists",
+      "query": "uds_exists"
+    },
+    {
+      "path": "./baked_in.go",
+      "line_number": 215,
+      "line_text": "\t\t\"uds_exists\":                    isUnixDomainSocketExists,",
+      "query": "uds_exists"
+    },
+    {
+      "path": "./validator_test.go",
+      "line_number": 3072,
+      "line_text": "\t\terrs := validate.Var(\"\", \"uds_exists\")",
+      "query": "uds_exists"
+    },
+    {
+      "path": "./validator_test.go",
+      "line_number": 3074,
+      "line_text": "\t\tAssertError(t, errs, \"\", \"\", \"\", \"\", \"uds_exists\")",
+      "query": "uds_exists"
+    },
+    {
+      "path": "./validator_test.go",
+      "line_number": 3078,
+      "line_text": "\t\terrs := validate.Var(\"/tmp/nonexistent.sock\", \"uds_exists\")",
+      "query": "uds_exists"
+    },
+    {
+      "path": "./validator_test.go",
+      "line_number": 3080,
+      "line_text": "\t\tAssertError(t, errs, \"\", \"\", \"\", \"\", \"uds_exists\")",
+      "query": "uds_exists"
+    },
+    {
+      "path": "./validator_test.go",
+      "line_number": 3095,
+      "line_text": "\t\terrs := validate.Var(sockPath, \"uds_exists\")",
+      "query": "uds_exists"
+    },
+    {
+      "path": "./validator_test.go",
+      "line_number": 3108,
+      "line_text": "\t\terrs := validate.Var(regularFile, \"uds_exists\")",
+      "query": "uds_exists"
+    },
+    {
+      "path": "./validator_test.go",
+      "line_number": 3110,
+      "line_text": "\t\tAssertError(t, errs, \"\", \"\", \"\", \"\", \"uds_exists\")",
+      "query": "uds_exists"
+    },
+    {
+      "path": "./validator_test.go",
+      "line_number": 3122,
+      "line_text": "\t\terrs := validate.Var(dirPath, \"uds_exists\")",
+      "query": "uds_exists"
+    },
+    {
+      "path": "./validator_test.go",
+      "line_number": 3124,
+      "line_text": "\t\tAssertError(t, errs, \"\", \"\", \"\", \"\", \"uds_exists\")",
+      "query": "uds_exists"
+    },
+    {
+      "path": "./validator_test.go",
+      "line_number": 3134,
+      "line_text": "\t\t\terrs := validate.Var(\"@nonexistent_abstract_socket\", \"uds_exists\")",
+      "query": "uds_exists"
+    },
+    {
+      "path": "./validator_test.go",
+      "line_number": 3136,
+      "line_text": "\t\t\tAssertError(t, errs, \"\", \"\", \"\", \"\", \"uds_exists\")",
+      "query": "uds_exists"
+    },
+    {
+      "path": "./validator_test.go",
+      "line_number": 3150,
+      "line_text": "\t\t\terrs := validate.Var(abstractSockName, \"uds_exists\")",
+      "query": "uds_exists"
+    },
+    {
+      "path": "./baked_in.go",
+      "line_number": 2826,
+      "line_text": "// isAbstractSocketExists checks if a Linux abstract socket exists by reading /proc/net/unix.",
+      "query": "/proc/net/unix"
+    },
+    {
+      "path": "./baked_in.go",
+      "line_number": 2829,
+      "line_text": "\tfile, err := os.Open(\"/proc/net/unix\")",
+      "query": "/proc/net/unix"
+    },
+    {
+      "path": "./baked_in.go",
+      "line_number": 2844,
+      "line_text": "\t// Abstract sockets in /proc/net/unix are represented with @ prefix",
+      "query": "/proc/net/unix"
+    },
+    {
+      "path": "./doc.go",
+      "line_number": 1360,
+      "line_text": "For abstract sockets on Linux, it checks /proc/net/unix.",
+      "query": "/proc/net/unix"
+    },
+    {
+      "path": "./validator_test.go",
+      "line_number": 6657,
+      "line_text": "\t\t{\"cTivdBmq7bay3RFGEBBuNfMh2P1pDCgRYN2Wbxmgwr4ki3jNUL2va\", false},",
+      "query": "NUL"
+    }
+  ],
+  "files": [
+    "./baked_in.go",
+    "./doc.go",
+    "./translations/id/id.go",
+    "./translations/id/id_test.go",
+    "./validator_test.go"
+  ]
+}

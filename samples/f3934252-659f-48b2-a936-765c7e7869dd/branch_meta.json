@@ -1,0 +1,7 @@
+{
+  "branch_name": "agent/issue-1348-bug-unix-addr-check-is-useless",
+  "base_sha": "3f6cc52a951afde5b7375bba2b2826fa1c6f31d0",
+  "default_branch": "master",
+  "issue_number": 1348,
+  "issue_title": "bug: unix_addr check is useless"
+}

@@ -1,0 +1,25 @@
+diff --git a/baked_in.go b/baked_in.go
+index 679729a..d1e0465 100644
+--- a/baked_in.go
++++ b/baked_in.go
+@@ -2790,9 +2790,18 @@ func isIPAddrResolvable(fl FieldLevel) bool {
+ 
+ // isUnixAddrResolvable is the validation function for validating if the field's value is a resolvable unix address.
+ func isUnixAddrResolvable(fl FieldLevel) bool {
+-	_, err := net.ResolveUnixAddr("unix", fl.Field().String())
++	addr := fl.Field().String()
++	_, err := net.ResolveUnixAddr("unix", addr)
++	if err != nil {
++		return false
++	}
+ 
+-	return err == nil
++	fileInfo, err := os.Stat(addr)
++	if err != nil {
++		return false
++	}
++
++	return !fileInfo.IsDir() && (fileInfo.Mode()&fs.ModeSocket) == fs.ModeSocket
+ }
+ 
+ // isUnixDomainSocketExists is the validation function for validating if the field's value is an existing Unix domain socket.

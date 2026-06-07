@@ -1,0 +1,2954 @@
+{
+  "repo": "go-playground/validator",
+  "module_path": "github.com/go-playground/validator/v10",
+  "nodes": [
+    {
+      "id": "file:_examples/custom-validation/main.go",
+      "kind": "file",
+      "label": "_examples/custom-validation/main.go"
+    },
+    {
+      "id": "file:_examples/custom/main.go",
+      "kind": "file",
+      "label": "_examples/custom/main.go"
+    },
+    {
+      "id": "file:_examples/dive/main.go",
+      "kind": "file",
+      "label": "_examples/dive/main.go"
+    },
+    {
+      "id": "file:_examples/gin-upgrading-overriding/main.go",
+      "kind": "file",
+      "label": "_examples/gin-upgrading-overriding/main.go"
+    },
+    {
+      "id": "file:_examples/gin-upgrading-overriding/v8_to_v9.go",
+      "kind": "file",
+      "label": "_examples/gin-upgrading-overriding/v8_to_v9.go"
+    },
+    {
+      "id": "file:_examples/http-transalations/main.go",
+      "kind": "file",
+      "label": "_examples/http-transalations/main.go"
+    },
+    {
+      "id": "file:_examples/map-validation/main.go",
+      "kind": "file",
+      "label": "_examples/map-validation/main.go"
+    },
+    {
+      "id": "file:_examples/simple/main.go",
+      "kind": "file",
+      "label": "_examples/simple/main.go"
+    },
+    {
+      "id": "file:_examples/struct-level/main.go",
+      "kind": "file",
+      "label": "_examples/struct-level/main.go"
+    },
+    {
+      "id": "file:_examples/struct-map-rules-validation/main.go",
+      "kind": "file",
+      "label": "_examples/struct-map-rules-validation/main.go"
+    },
+    {
+      "id": "file:_examples/translations/main.go",
+      "kind": "file",
+      "label": "_examples/translations/main.go"
+    },
+    {
+      "id": "file:_examples/validate_fn/enum_enumer.go",
+      "kind": "file",
+      "label": "_examples/validate_fn/enum_enumer.go"
+    },
+    {
+      "id": "file:_examples/validate_fn/main.go",
+      "kind": "file",
+      "label": "_examples/validate_fn/main.go"
+    },
+    {
+      "id": "file:_examples/valuer/main.go",
+      "kind": "file",
+      "label": "_examples/valuer/main.go"
+    },
+    {
+      "id": "file:baked_in.go",
+      "kind": "file",
+      "label": "baked_in.go"
+    },
+    {
+      "id": "file:benchmarks_test.go",
+      "kind": "file",
+      "label": "benchmarks_test.go"
+    },
+    {
+      "id": "file:cache.go",
+      "kind": "file",
+      "label": "cache.go"
+    },
+    {
+      "id": "file:country_codes.go",
+      "kind": "file",
+      "label": "country_codes.go"
+    },
+    {
+      "id": "file:currency_codes.go",
+      "kind": "file",
+      "label": "currency_codes.go"
+    },
+    {
+      "id": "file:doc.go",
+      "kind": "file",
+      "label": "doc.go"
+    },
+    {
+      "id": "file:errors.go",
+      "kind": "file",
+      "label": "errors.go"
+    },
+    {
+      "id": "file:field_level.go",
+      "kind": "file",
+      "label": "field_level.go"
+    },
+    {
+      "id": "file:language_codes.go",
+      "kind": "file",
+      "label": "language_codes.go"
+    },
+    {
+      "id": "file:no_validate_fn.go",
+      "kind": "file",
+      "label": "no_validate_fn.go"
+    },
+    {
+      "id": "file:non-standard/validators/notblank.go",
+      "kind": "file",
+      "label": "non-standard/validators/notblank.go"
+    },
+    {
+      "id": "file:non-standard/validators/notblank_test.go",
+      "kind": "file",
+      "label": "non-standard/validators/notblank_test.go"
+    },
+    {
+      "id": "file:options.go",
+      "kind": "file",
+      "label": "options.go"
+    },
+    {
+      "id": "file:postcode_regexes.go",
+      "kind": "file",
+      "label": "postcode_regexes.go"
+    },
+    {
+      "id": "file:regexes.go",
+      "kind": "file",
+      "label": "regexes.go"
+    },
+    {
+      "id": "file:struct_level.go",
+      "kind": "file",
+      "label": "struct_level.go"
+    },
+    {
+      "id": "file:testdata/a.go",
+      "kind": "file",
+      "label": "testdata/a.go"
+    },
+    {
+      "id": "file:translations.go",
+      "kind": "file",
+      "label": "translations.go"
+    },
+    {
+      "id": "file:translations/ar/ar.go",
+      "kind": "file",
+      "label": "translations/ar/ar.go"
+    },
+    {
+      "id": "file:translations/ar/ar_test.go",
+      "kind": "file",
+      "label": "translations/ar/ar_test.go"
+    },
+    {
+      "id": "file:translations/de/de.go",
+      "kind": "file",
+      "label": "translations/de/de.go"
+    },
+    {
+      "id": "file:translations/de/de_test.go",
+      "kind": "file",
+      "label": "translations/de/de_test.go"
+    },
+    {
+      "id": "file:translations/en/en.go",
+      "kind": "file",
+      "label": "translations/en/en.go"
+    },
+    {
+      "id": "file:translations/en/en_test.go",
+      "kind": "file",
+      "label": "translations/en/en_test.go"
+    },
+    {
+      "id": "file:translations/es/es.go",
+      "kind": "file",
+      "label": "translations/es/es.go"
+    },
+    {
+      "id": "file:translations/es/es_test.go",
+      "kind": "file",
+      "label": "translations/es/es_test.go"
+    },
+    {
+      "id": "file:translations/fa/fa.go",
+      "kind": "file",
+      "label": "translations/fa/fa.go"
+    },
+    {
+      "id": "file:translations/fa/fa_test.go",
+      "kind": "file",
+      "label": "translations/fa/fa_test.go"
+    },
+    {
+      "id": "file:translations/fr/fr.go",
+      "kind": "file",
+      "label": "translations/fr/fr.go"
+    },
+    {
+      "id": "file:translations/fr/fr_test.go",
+      "kind": "file",
+      "label": "translations/fr/fr_test.go"
+    },
+    {
+      "id": "file:translations/id/id.go",
+      "kind": "file",
+      "label": "translations/id/id.go"
+    },
+    {
+      "id": "file:translations/id/id_test.go",
+      "kind": "file",
+      "label": "translations/id/id_test.go"
+    },
+    {
+      "id": "file:translations/it/it.go",
+      "kind": "file",
+      "label": "translations/it/it.go"
+    },
+    {
+      "id": "file:translations/it/it_test.go",
+      "kind": "file",
+      "label": "translations/it/it_test.go"
+    },
+    {
+      "id": "file:translations/ja/ja.go",
+      "kind": "file",
+      "label": "translations/ja/ja.go"
+    },
+    {
+      "id": "file:translations/ja/ja_test.go",
+      "kind": "file",
+      "label": "translations/ja/ja_test.go"
+    },
+    {
+      "id": "file:translations/ko/ko.go",
+      "kind": "file",
+      "label": "translations/ko/ko.go"
+    },
+    {
+      "id": "file:translations/ko/ko_test.go",
+      "kind": "file",
+      "label": "translations/ko/ko_test.go"
+    },
+    {
+      "id": "file:translations/lv/lv.go",
+      "kind": "file",
+      "label": "translations/lv/lv.go"
+    },
+    {
+      "id": "file:translations/lv/lv_test.go",
+      "kind": "file",
+      "label": "translations/lv/lv_test.go"
+    },
+    {
+      "id": "file:translations/nl/nl.go",
+      "kind": "file",
+      "label": "translations/nl/nl.go"
+    },
+    {
+      "id": "file:translations/nl/nl_test.go",
+      "kind": "file",
+      "label": "translations/nl/nl_test.go"
+    },
+    {
+      "id": "file:translations/pl/pl.go",
+      "kind": "file",
+      "label": "translations/pl/pl.go"
+    },
+    {
+      "id": "file:translations/pl/pl_test.go",
+      "kind": "file",
+      "label": "translations/pl/pl_test.go"
+    },
+    {
+      "id": "file:translations/pt/pt.go",
+      "kind": "file",
+      "label": "translations/pt/pt.go"
+    },
+    {
+      "id": "file:translations/pt/pt_test.go",
+      "kind": "file",
+      "label": "translations/pt/pt_test.go"
+    },
+    {
+      "id": "file:translations/pt_BR/pt_BR.go",
+      "kind": "file",
+      "label": "translations/pt_BR/pt_BR.go"
+    },
+    {
+      "id": "file:translations/pt_BR/pt_BR_test.go",
+      "kind": "file",
+      "label": "translations/pt_BR/pt_BR_test.go"
+    },
+    {
+      "id": "file:translations/ru/ru.go",
+      "kind": "file",
+      "label": "translations/ru/ru.go"
+    },
+    {
+      "id": "file:translations/ru/ru_test.go",
+      "kind": "file",
+      "label": "translations/ru/ru_test.go"
+    },
+    {
+      "id": "file:translations/th/th.go",
+      "kind": "file",
+      "label": "translations/th/th.go"
+    },
+    {
+      "id": "file:translations/th/th_test.go",
+      "kind": "file",
+      "label": "translations/th/th_test.go"
+    },
+    {
+      "id": "file:translations/tr/tr.go",
+      "kind": "file",
+      "label": "translations/tr/tr.go"
+    },
+    {
+      "id": "file:translations/tr/tr_test.go",
+      "kind": "file",
+      "label": "translations/tr/tr_test.go"
+    },
+    {
+      "id": "file:translations/uk/uk.go",
+      "kind": "file",
+      "label": "translations/uk/uk.go"
+    },
+    {
+      "id": "file:translations/uk/uk_test.go",
+      "kind": "file",
+      "label": "translations/uk/uk_test.go"
+    },
+    {
+      "id": "file:translations/vi/vi.go",
+      "kind": "file",
+      "label": "translations/vi/vi.go"
+    },
+    {
+      "id": "file:translations/vi/vi_test.go",
+      "kind": "file",
+      "label": "translations/vi/vi_test.go"
+    },
+    {
+      "id": "file:translations/zh/zh.go",
+      "kind": "file",
+      "label": "translations/zh/zh.go"
+    },
+    {
+      "id": "file:translations/zh/zh_test.go",
+      "kind": "file",
+      "label": "translations/zh/zh_test.go"
+    },
+    {
+      "id": "file:translations/zh_tw/zh_tw.go",
+      "kind": "file",
+      "label": "translations/zh_tw/zh_tw.go"
+    },
+    {
+      "id": "file:translations/zh_tw/zh_tw_test.go",
+      "kind": "file",
+      "label": "translations/zh_tw/zh_tw_test.go"
+    },
+    {
+      "id": "file:util.go",
+      "kind": "file",
+      "label": "util.go"
+    },
+    {
+      "id": "file:validate_fn.go",
+      "kind": "file",
+      "label": "validate_fn.go"
+    },
+    {
+      "id": "file:validator.go",
+      "kind": "file",
+      "label": "validator.go"
+    },
+    {
+      "id": "file:validator_instance.go",
+      "kind": "file",
+      "label": "validator_instance.go"
+    },
+    {
+      "id": "file:validator_test.go",
+      "kind": "file",
+      "label": "validator_test.go"
+    }
+  ],
+  "edges": [
+    {
+      "source": "file:_examples/gin-upgrading-overriding/main.go",
+      "target": "file:_examples/gin-upgrading-overriding/v8_to_v9.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:_examples/gin-upgrading-overriding/v8_to_v9.go",
+      "target": "file:_examples/gin-upgrading-overriding/main.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:_examples/validate_fn/enum_enumer.go",
+      "target": "file:_examples/validate_fn/main.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:_examples/validate_fn/main.go",
+      "target": "file:_examples/validate_fn/enum_enumer.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:baked_in.go",
+      "target": "file:benchmarks_test.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:benchmarks_test.go",
+      "target": "file:baked_in.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:baked_in.go",
+      "target": "file:cache.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:cache.go",
+      "target": "file:baked_in.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:baked_in.go",
+      "target": "file:country_codes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:country_codes.go",
+      "target": "file:baked_in.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:baked_in.go",
+      "target": "file:currency_codes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:currency_codes.go",
+      "target": "file:baked_in.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:baked_in.go",
+      "target": "file:doc.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:doc.go",
+      "target": "file:baked_in.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:baked_in.go",
+      "target": "file:errors.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:errors.go",
+      "target": "file:baked_in.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:baked_in.go",
+      "target": "file:field_level.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:field_level.go",
+      "target": "file:baked_in.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:baked_in.go",
+      "target": "file:language_codes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:language_codes.go",
+      "target": "file:baked_in.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:baked_in.go",
+      "target": "file:no_validate_fn.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:no_validate_fn.go",
+      "target": "file:baked_in.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:baked_in.go",
+      "target": "file:options.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:options.go",
+      "target": "file:baked_in.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:baked_in.go",
+      "target": "file:postcode_regexes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:postcode_regexes.go",
+      "target": "file:baked_in.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:baked_in.go",
+      "target": "file:regexes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:regexes.go",
+      "target": "file:baked_in.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:baked_in.go",
+      "target": "file:struct_level.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:struct_level.go",
+      "target": "file:baked_in.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:baked_in.go",
+      "target": "file:translations.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:translations.go",
+      "target": "file:baked_in.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:baked_in.go",
+      "target": "file:util.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:util.go",
+      "target": "file:baked_in.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:baked_in.go",
+      "target": "file:validate_fn.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:validate_fn.go",
+      "target": "file:baked_in.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:baked_in.go",
+      "target": "file:validator.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:validator.go",
+      "target": "file:baked_in.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:baked_in.go",
+      "target": "file:validator_instance.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:validator_instance.go",
+      "target": "file:baked_in.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:baked_in.go",
+      "target": "file:validator_test.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:validator_test.go",
+      "target": "file:baked_in.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:benchmarks_test.go",
+      "target": "file:cache.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:cache.go",
+      "target": "file:benchmarks_test.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:benchmarks_test.go",
+      "target": "file:country_codes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:country_codes.go",
+      "target": "file:benchmarks_test.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:benchmarks_test.go",
+      "target": "file:currency_codes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:currency_codes.go",
+      "target": "file:benchmarks_test.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:benchmarks_test.go",
+      "target": "file:doc.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:doc.go",
+      "target": "file:benchmarks_test.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:benchmarks_test.go",
+      "target": "file:errors.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:errors.go",
+      "target": "file:benchmarks_test.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:benchmarks_test.go",
+      "target": "file:field_level.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:field_level.go",
+      "target": "file:benchmarks_test.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:benchmarks_test.go",
+      "target": "file:language_codes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:language_codes.go",
+      "target": "file:benchmarks_test.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:benchmarks_test.go",
+      "target": "file:no_validate_fn.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:no_validate_fn.go",
+      "target": "file:benchmarks_test.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:benchmarks_test.go",
+      "target": "file:options.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:options.go",
+      "target": "file:benchmarks_test.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:benchmarks_test.go",
+      "target": "file:postcode_regexes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:postcode_regexes.go",
+      "target": "file:benchmarks_test.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:benchmarks_test.go",
+      "target": "file:regexes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:regexes.go",
+      "target": "file:benchmarks_test.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:benchmarks_test.go",
+      "target": "file:struct_level.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:struct_level.go",
+      "target": "file:benchmarks_test.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:benchmarks_test.go",
+      "target": "file:translations.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:translations.go",
+      "target": "file:benchmarks_test.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:benchmarks_test.go",
+      "target": "file:util.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:util.go",
+      "target": "file:benchmarks_test.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:benchmarks_test.go",
+      "target": "file:validate_fn.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:validate_fn.go",
+      "target": "file:benchmarks_test.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:benchmarks_test.go",
+      "target": "file:validator.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:validator.go",
+      "target": "file:benchmarks_test.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:benchmarks_test.go",
+      "target": "file:validator_instance.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:validator_instance.go",
+      "target": "file:benchmarks_test.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:benchmarks_test.go",
+      "target": "file:validator_test.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:validator_test.go",
+      "target": "file:benchmarks_test.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:cache.go",
+      "target": "file:country_codes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:country_codes.go",
+      "target": "file:cache.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:cache.go",
+      "target": "file:currency_codes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:currency_codes.go",
+      "target": "file:cache.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:cache.go",
+      "target": "file:doc.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:doc.go",
+      "target": "file:cache.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:cache.go",
+      "target": "file:errors.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:errors.go",
+      "target": "file:cache.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:cache.go",
+      "target": "file:field_level.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:field_level.go",
+      "target": "file:cache.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:cache.go",
+      "target": "file:language_codes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:language_codes.go",
+      "target": "file:cache.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:cache.go",
+      "target": "file:no_validate_fn.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:no_validate_fn.go",
+      "target": "file:cache.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:cache.go",
+      "target": "file:options.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:options.go",
+      "target": "file:cache.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:cache.go",
+      "target": "file:postcode_regexes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:postcode_regexes.go",
+      "target": "file:cache.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:cache.go",
+      "target": "file:regexes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:regexes.go",
+      "target": "file:cache.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:cache.go",
+      "target": "file:struct_level.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:struct_level.go",
+      "target": "file:cache.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:cache.go",
+      "target": "file:translations.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:translations.go",
+      "target": "file:cache.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:cache.go",
+      "target": "file:util.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:util.go",
+      "target": "file:cache.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:cache.go",
+      "target": "file:validate_fn.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:validate_fn.go",
+      "target": "file:cache.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:cache.go",
+      "target": "file:validator.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:validator.go",
+      "target": "file:cache.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:cache.go",
+      "target": "file:validator_instance.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:validator_instance.go",
+      "target": "file:cache.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:cache.go",
+      "target": "file:validator_test.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:validator_test.go",
+      "target": "file:cache.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:country_codes.go",
+      "target": "file:currency_codes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:currency_codes.go",
+      "target": "file:country_codes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:country_codes.go",
+      "target": "file:doc.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:doc.go",
+      "target": "file:country_codes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:country_codes.go",
+      "target": "file:errors.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:errors.go",
+      "target": "file:country_codes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:country_codes.go",
+      "target": "file:field_level.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:field_level.go",
+      "target": "file:country_codes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:country_codes.go",
+      "target": "file:language_codes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:language_codes.go",
+      "target": "file:country_codes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:country_codes.go",
+      "target": "file:no_validate_fn.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:no_validate_fn.go",
+      "target": "file:country_codes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:country_codes.go",
+      "target": "file:options.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:options.go",
+      "target": "file:country_codes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:country_codes.go",
+      "target": "file:postcode_regexes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:postcode_regexes.go",
+      "target": "file:country_codes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:country_codes.go",
+      "target": "file:regexes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:regexes.go",
+      "target": "file:country_codes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:country_codes.go",
+      "target": "file:struct_level.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:struct_level.go",
+      "target": "file:country_codes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:country_codes.go",
+      "target": "file:translations.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:translations.go",
+      "target": "file:country_codes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:country_codes.go",
+      "target": "file:util.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:util.go",
+      "target": "file:country_codes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:country_codes.go",
+      "target": "file:validate_fn.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:validate_fn.go",
+      "target": "file:country_codes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:country_codes.go",
+      "target": "file:validator.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:validator.go",
+      "target": "file:country_codes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:country_codes.go",
+      "target": "file:validator_instance.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:validator_instance.go",
+      "target": "file:country_codes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:country_codes.go",
+      "target": "file:validator_test.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:validator_test.go",
+      "target": "file:country_codes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:currency_codes.go",
+      "target": "file:doc.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:doc.go",
+      "target": "file:currency_codes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:currency_codes.go",
+      "target": "file:errors.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:errors.go",
+      "target": "file:currency_codes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:currency_codes.go",
+      "target": "file:field_level.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:field_level.go",
+      "target": "file:currency_codes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:currency_codes.go",
+      "target": "file:language_codes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:language_codes.go",
+      "target": "file:currency_codes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:currency_codes.go",
+      "target": "file:no_validate_fn.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:no_validate_fn.go",
+      "target": "file:currency_codes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:currency_codes.go",
+      "target": "file:options.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:options.go",
+      "target": "file:currency_codes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:currency_codes.go",
+      "target": "file:postcode_regexes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:postcode_regexes.go",
+      "target": "file:currency_codes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:currency_codes.go",
+      "target": "file:regexes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:regexes.go",
+      "target": "file:currency_codes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:currency_codes.go",
+      "target": "file:struct_level.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:struct_level.go",
+      "target": "file:currency_codes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:currency_codes.go",
+      "target": "file:translations.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:translations.go",
+      "target": "file:currency_codes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:currency_codes.go",
+      "target": "file:util.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:util.go",
+      "target": "file:currency_codes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:currency_codes.go",
+      "target": "file:validate_fn.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:validate_fn.go",
+      "target": "file:currency_codes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:currency_codes.go",
+      "target": "file:validator.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:validator.go",
+      "target": "file:currency_codes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:currency_codes.go",
+      "target": "file:validator_instance.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:validator_instance.go",
+      "target": "file:currency_codes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:currency_codes.go",
+      "target": "file:validator_test.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:validator_test.go",
+      "target": "file:currency_codes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:doc.go",
+      "target": "file:errors.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:errors.go",
+      "target": "file:doc.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:doc.go",
+      "target": "file:field_level.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:field_level.go",
+      "target": "file:doc.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:doc.go",
+      "target": "file:language_codes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:language_codes.go",
+      "target": "file:doc.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:doc.go",
+      "target": "file:no_validate_fn.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:no_validate_fn.go",
+      "target": "file:doc.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:doc.go",
+      "target": "file:options.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:options.go",
+      "target": "file:doc.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:doc.go",
+      "target": "file:postcode_regexes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:postcode_regexes.go",
+      "target": "file:doc.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:doc.go",
+      "target": "file:regexes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:regexes.go",
+      "target": "file:doc.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:doc.go",
+      "target": "file:struct_level.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:struct_level.go",
+      "target": "file:doc.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:doc.go",
+      "target": "file:translations.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:translations.go",
+      "target": "file:doc.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:doc.go",
+      "target": "file:util.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:util.go",
+      "target": "file:doc.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:doc.go",
+      "target": "file:validate_fn.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:validate_fn.go",
+      "target": "file:doc.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:doc.go",
+      "target": "file:validator.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:validator.go",
+      "target": "file:doc.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:doc.go",
+      "target": "file:validator_instance.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:validator_instance.go",
+      "target": "file:doc.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:doc.go",
+      "target": "file:validator_test.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:validator_test.go",
+      "target": "file:doc.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:errors.go",
+      "target": "file:field_level.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:field_level.go",
+      "target": "file:errors.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:errors.go",
+      "target": "file:language_codes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:language_codes.go",
+      "target": "file:errors.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:errors.go",
+      "target": "file:no_validate_fn.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:no_validate_fn.go",
+      "target": "file:errors.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:errors.go",
+      "target": "file:options.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:options.go",
+      "target": "file:errors.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:errors.go",
+      "target": "file:postcode_regexes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:postcode_regexes.go",
+      "target": "file:errors.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:errors.go",
+      "target": "file:regexes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:regexes.go",
+      "target": "file:errors.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:errors.go",
+      "target": "file:struct_level.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:struct_level.go",
+      "target": "file:errors.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:errors.go",
+      "target": "file:translations.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:translations.go",
+      "target": "file:errors.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:errors.go",
+      "target": "file:util.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:util.go",
+      "target": "file:errors.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:errors.go",
+      "target": "file:validate_fn.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:validate_fn.go",
+      "target": "file:errors.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:errors.go",
+      "target": "file:validator.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:validator.go",
+      "target": "file:errors.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:errors.go",
+      "target": "file:validator_instance.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:validator_instance.go",
+      "target": "file:errors.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:errors.go",
+      "target": "file:validator_test.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:validator_test.go",
+      "target": "file:errors.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:field_level.go",
+      "target": "file:language_codes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:language_codes.go",
+      "target": "file:field_level.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:field_level.go",
+      "target": "file:no_validate_fn.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:no_validate_fn.go",
+      "target": "file:field_level.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:field_level.go",
+      "target": "file:options.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:options.go",
+      "target": "file:field_level.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:field_level.go",
+      "target": "file:postcode_regexes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:postcode_regexes.go",
+      "target": "file:field_level.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:field_level.go",
+      "target": "file:regexes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:regexes.go",
+      "target": "file:field_level.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:field_level.go",
+      "target": "file:struct_level.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:struct_level.go",
+      "target": "file:field_level.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:field_level.go",
+      "target": "file:translations.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:translations.go",
+      "target": "file:field_level.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:field_level.go",
+      "target": "file:util.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:util.go",
+      "target": "file:field_level.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:field_level.go",
+      "target": "file:validate_fn.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:validate_fn.go",
+      "target": "file:field_level.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:field_level.go",
+      "target": "file:validator.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:validator.go",
+      "target": "file:field_level.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:field_level.go",
+      "target": "file:validator_instance.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:validator_instance.go",
+      "target": "file:field_level.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:field_level.go",
+      "target": "file:validator_test.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:validator_test.go",
+      "target": "file:field_level.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:language_codes.go",
+      "target": "file:no_validate_fn.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:no_validate_fn.go",
+      "target": "file:language_codes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:language_codes.go",
+      "target": "file:options.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:options.go",
+      "target": "file:language_codes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:language_codes.go",
+      "target": "file:postcode_regexes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:postcode_regexes.go",
+      "target": "file:language_codes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:language_codes.go",
+      "target": "file:regexes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:regexes.go",
+      "target": "file:language_codes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:language_codes.go",
+      "target": "file:struct_level.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:struct_level.go",
+      "target": "file:language_codes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:language_codes.go",
+      "target": "file:translations.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:translations.go",
+      "target": "file:language_codes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:language_codes.go",
+      "target": "file:util.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:util.go",
+      "target": "file:language_codes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:language_codes.go",
+      "target": "file:validate_fn.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:validate_fn.go",
+      "target": "file:language_codes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:language_codes.go",
+      "target": "file:validator.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:validator.go",
+      "target": "file:language_codes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:language_codes.go",
+      "target": "file:validator_instance.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:validator_instance.go",
+      "target": "file:language_codes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:language_codes.go",
+      "target": "file:validator_test.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:validator_test.go",
+      "target": "file:language_codes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:no_validate_fn.go",
+      "target": "file:options.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:options.go",
+      "target": "file:no_validate_fn.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:no_validate_fn.go",
+      "target": "file:postcode_regexes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:postcode_regexes.go",
+      "target": "file:no_validate_fn.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:no_validate_fn.go",
+      "target": "file:regexes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:regexes.go",
+      "target": "file:no_validate_fn.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:no_validate_fn.go",
+      "target": "file:struct_level.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:struct_level.go",
+      "target": "file:no_validate_fn.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:no_validate_fn.go",
+      "target": "file:translations.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:translations.go",
+      "target": "file:no_validate_fn.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:no_validate_fn.go",
+      "target": "file:util.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:util.go",
+      "target": "file:no_validate_fn.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:no_validate_fn.go",
+      "target": "file:validate_fn.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:validate_fn.go",
+      "target": "file:no_validate_fn.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:no_validate_fn.go",
+      "target": "file:validator.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:validator.go",
+      "target": "file:no_validate_fn.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:no_validate_fn.go",
+      "target": "file:validator_instance.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:validator_instance.go",
+      "target": "file:no_validate_fn.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:no_validate_fn.go",
+      "target": "file:validator_test.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:validator_test.go",
+      "target": "file:no_validate_fn.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:options.go",
+      "target": "file:postcode_regexes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:postcode_regexes.go",
+      "target": "file:options.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:options.go",
+      "target": "file:regexes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:regexes.go",
+      "target": "file:options.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:options.go",
+      "target": "file:struct_level.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:struct_level.go",
+      "target": "file:options.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:options.go",
+      "target": "file:translations.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:translations.go",
+      "target": "file:options.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:options.go",
+      "target": "file:util.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:util.go",
+      "target": "file:options.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:options.go",
+      "target": "file:validate_fn.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:validate_fn.go",
+      "target": "file:options.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:options.go",
+      "target": "file:validator.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:validator.go",
+      "target": "file:options.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:options.go",
+      "target": "file:validator_instance.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:validator_instance.go",
+      "target": "file:options.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:options.go",
+      "target": "file:validator_test.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:validator_test.go",
+      "target": "file:options.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:postcode_regexes.go",
+      "target": "file:regexes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:regexes.go",
+      "target": "file:postcode_regexes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:postcode_regexes.go",
+      "target": "file:struct_level.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:struct_level.go",
+      "target": "file:postcode_regexes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:postcode_regexes.go",
+      "target": "file:translations.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:translations.go",
+      "target": "file:postcode_regexes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:postcode_regexes.go",
+      "target": "file:util.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:util.go",
+      "target": "file:postcode_regexes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:postcode_regexes.go",
+      "target": "file:validate_fn.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:validate_fn.go",
+      "target": "file:postcode_regexes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:postcode_regexes.go",
+      "target": "file:validator.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:validator.go",
+      "target": "file:postcode_regexes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:postcode_regexes.go",
+      "target": "file:validator_instance.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:validator_instance.go",
+      "target": "file:postcode_regexes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:postcode_regexes.go",
+      "target": "file:validator_test.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:validator_test.go",
+      "target": "file:postcode_regexes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:regexes.go",
+      "target": "file:struct_level.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:struct_level.go",
+      "target": "file:regexes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:regexes.go",
+      "target": "file:translations.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:translations.go",
+      "target": "file:regexes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:regexes.go",
+      "target": "file:util.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:util.go",
+      "target": "file:regexes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:regexes.go",
+      "target": "file:validate_fn.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:validate_fn.go",
+      "target": "file:regexes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:regexes.go",
+      "target": "file:validator.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:validator.go",
+      "target": "file:regexes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:regexes.go",
+      "target": "file:validator_instance.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:validator_instance.go",
+      "target": "file:regexes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:regexes.go",
+      "target": "file:validator_test.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:validator_test.go",
+      "target": "file:regexes.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:struct_level.go",
+      "target": "file:translations.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:translations.go",
+      "target": "file:struct_level.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:struct_level.go",
+      "target": "file:util.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:util.go",
+      "target": "file:struct_level.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:struct_level.go",
+      "target": "file:validate_fn.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:validate_fn.go",
+      "target": "file:struct_level.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:struct_level.go",
+      "target": "file:validator.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:validator.go",
+      "target": "file:struct_level.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:struct_level.go",
+      "target": "file:validator_instance.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:validator_instance.go",
+      "target": "file:struct_level.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:struct_level.go",
+      "target": "file:validator_test.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:validator_test.go",
+      "target": "file:struct_level.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:translations.go",
+      "target": "file:util.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:util.go",
+      "target": "file:translations.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:translations.go",
+      "target": "file:validate_fn.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:validate_fn.go",
+      "target": "file:translations.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:translations.go",
+      "target": "file:validator.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:validator.go",
+      "target": "file:translations.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:translations.go",
+      "target": "file:validator_instance.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:validator_instance.go",
+      "target": "file:translations.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:translations.go",
+      "target": "file:validator_test.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:validator_test.go",
+      "target": "file:translations.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:util.go",
+      "target": "file:validate_fn.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:validate_fn.go",
+      "target": "file:util.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:util.go",
+      "target": "file:validator.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:validator.go",
+      "target": "file:util.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:util.go",
+      "target": "file:validator_instance.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:validator_instance.go",
+      "target": "file:util.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:util.go",
+      "target": "file:validator_test.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:validator_test.go",
+      "target": "file:util.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:validate_fn.go",
+      "target": "file:validator.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:validator.go",
+      "target": "file:validate_fn.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:validate_fn.go",
+      "target": "file:validator_instance.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:validator_instance.go",
+      "target": "file:validate_fn.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:validate_fn.go",
+      "target": "file:validator_test.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:validator_test.go",
+      "target": "file:validate_fn.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:validator.go",
+      "target": "file:validator_instance.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:validator_instance.go",
+      "target": "file:validator.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:validator.go",
+      "target": "file:validator_test.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:validator_test.go",
+      "target": "file:validator.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:validator_instance.go",
+      "target": "file:validator_test.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:validator_test.go",
+      "target": "file:validator_instance.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:non-standard/validators/notblank.go",
+      "target": "file:non-standard/validators/notblank_test.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:non-standard/validators/notblank_test.go",
+      "target": "file:non-standard/validators/notblank.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:translations/ar/ar.go",
+      "target": "file:translations/ar/ar_test.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:translations/ar/ar_test.go",
+      "target": "file:translations/ar/ar.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:translations/de/de.go",
+      "target": "file:translations/de/de_test.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:translations/de/de_test.go",
+      "target": "file:translations/de/de.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:translations/en/en.go",
+      "target": "file:translations/en/en_test.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:translations/en/en_test.go",
+      "target": "file:translations/en/en.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:translations/es/es.go",
+      "target": "file:translations/es/es_test.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:translations/es/es_test.go",
+      "target": "file:translations/es/es.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:translations/fa/fa.go",
+      "target": "file:translations/fa/fa_test.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:translations/fa/fa_test.go",
+      "target": "file:translations/fa/fa.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:translations/fr/fr.go",
+      "target": "file:translations/fr/fr_test.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:translations/fr/fr_test.go",
+      "target": "file:translations/fr/fr.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:translations/id/id.go",
+      "target": "file:translations/id/id_test.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:translations/id/id_test.go",
+      "target": "file:translations/id/id.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:translations/it/it.go",
+      "target": "file:translations/it/it_test.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:translations/it/it_test.go",
+      "target": "file:translations/it/it.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:translations/ja/ja.go",
+      "target": "file:translations/ja/ja_test.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:translations/ja/ja_test.go",
+      "target": "file:translations/ja/ja.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:translations/ko/ko.go",
+      "target": "file:translations/ko/ko_test.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:translations/ko/ko_test.go",
+      "target": "file:translations/ko/ko.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:translations/lv/lv.go",
+      "target": "file:translations/lv/lv_test.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:translations/lv/lv_test.go",
+      "target": "file:translations/lv/lv.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:translations/nl/nl.go",
+      "target": "file:translations/nl/nl_test.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:translations/nl/nl_test.go",
+      "target": "file:translations/nl/nl.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:translations/pl/pl.go",
+      "target": "file:translations/pl/pl_test.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:translations/pl/pl_test.go",
+      "target": "file:translations/pl/pl.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:translations/pt/pt.go",
+      "target": "file:translations/pt/pt_test.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:translations/pt/pt_test.go",
+      "target": "file:translations/pt/pt.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:translations/pt_BR/pt_BR.go",
+      "target": "file:translations/pt_BR/pt_BR_test.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:translations/pt_BR/pt_BR_test.go",
+      "target": "file:translations/pt_BR/pt_BR.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:translations/ru/ru.go",
+      "target": "file:translations/ru/ru_test.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:translations/ru/ru_test.go",
+      "target": "file:translations/ru/ru.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:translations/th/th.go",
+      "target": "file:translations/th/th_test.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:translations/th/th_test.go",
+      "target": "file:translations/th/th.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:translations/tr/tr.go",
+      "target": "file:translations/tr/tr_test.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:translations/tr/tr_test.go",
+      "target": "file:translations/tr/tr.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:translations/uk/uk.go",
+      "target": "file:translations/uk/uk_test.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:translations/uk/uk_test.go",
+      "target": "file:translations/uk/uk.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:translations/vi/vi.go",
+      "target": "file:translations/vi/vi_test.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:translations/vi/vi_test.go",
+      "target": "file:translations/vi/vi.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:translations/zh/zh.go",
+      "target": "file:translations/zh/zh_test.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:translations/zh/zh_test.go",
+      "target": "file:translations/zh/zh.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:translations/zh_tw/zh_tw.go",
+      "target": "file:translations/zh_tw/zh_tw_test.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:translations/zh_tw/zh_tw_test.go",
+      "target": "file:translations/zh_tw/zh_tw.go",
+      "kind": "in_package"
+    },
+    {
+      "source": "file:non-standard/validators/notblank.go",
+      "target": "file:non-standard/validators/notblank_test.go",
+      "kind": "tests"
+    },
+    {
+      "source": "file:non-standard/validators/notblank_test.go",
+      "target": "file:non-standard/validators/notblank.go",
+      "kind": "tests"
+    },
+    {
+      "source": "file:translations/ar/ar.go",
+      "target": "file:translations/ar/ar_test.go",
+      "kind": "tests"
+    },
+    {
+      "source": "file:translations/ar/ar_test.go",
+      "target": "file:translations/ar/ar.go",
+      "kind": "tests"
+    },
+    {
+      "source": "file:translations/de/de.go",
+      "target": "file:translations/de/de_test.go",
+      "kind": "tests"
+    },
+    {
+      "source": "file:translations/de/de_test.go",
+      "target": "file:translations/de/de.go",
+      "kind": "tests"
+    },
+    {
+      "source": "file:translations/en/en.go",
+      "target": "file:translations/en/en_test.go",
+      "kind": "tests"
+    },
+    {
+      "source": "file:translations/en/en_test.go",
+      "target": "file:translations/en/en.go",
+      "kind": "tests"
+    },
+    {
+      "source": "file:translations/es/es.go",
+      "target": "file:translations/es/es_test.go",
+      "kind": "tests"
+    },
+    {
+      "source": "file:translations/es/es_test.go",
+      "target": "file:translations/es/es.go",
+      "kind": "tests"
+    },
+    {
+      "source": "file:translations/fa/fa.go",
+      "target": "file:translations/fa/fa_test.go",
+      "kind": "tests"
+    },
+    {
+      "source": "file:translations/fa/fa_test.go",
+      "target": "file:translations/fa/fa.go",
+      "kind": "tests"
+    },
+    {
+      "source": "file:translations/fr/fr.go",
+      "target": "file:translations/fr/fr_test.go",
+      "kind": "tests"
+    },
+    {
+      "source": "file:translations/fr/fr_test.go",
+      "target": "file:translations/fr/fr.go",
+      "kind": "tests"
+    },
+    {
+      "source": "file:translations/id/id.go",
+      "target": "file:translations/id/id_test.go",
+      "kind": "tests"
+    },
+    {
+      "source": "file:translations/id/id_test.go",
+      "target": "file:translations/id/id.go",
+      "kind": "tests"
+    },
+    {
+      "source": "file:translations/it/it.go",
+      "target": "file:translations/it/it_test.go",
+      "kind": "tests"
+    },
+    {
+      "source": "file:translations/it/it_test.go",
+      "target": "file:translations/it/it.go",
+      "kind": "tests"
+    },
+    {
+      "source": "file:translations/ja/ja.go",
+      "target": "file:translations/ja/ja_test.go",
+      "kind": "tests"
+    },
+    {
+      "source": "file:translations/ja/ja_test.go",
+      "target": "file:translations/ja/ja.go",
+      "kind": "tests"
+    },
+    {
+      "source": "file:translations/ko/ko.go",
+      "target": "file:translations/ko/ko_test.go",
+      "kind": "tests"
+    },
+    {
+      "source": "file:translations/ko/ko_test.go",
+      "target": "file:translations/ko/ko.go",
+      "kind": "tests"
+    },
+    {
+      "source": "file:translations/lv/lv.go",
+      "target": "file:translations/lv/lv_test.go",
+      "kind": "tests"
+    },
+    {
+      "source": "file:translations/lv/lv_test.go",
+      "target": "file:translations/lv/lv.go",
+      "kind": "tests"
+    },
+    {
+      "source": "file:translations/nl/nl.go",
+      "target": "file:translations/nl/nl_test.go",
+      "kind": "tests"
+    },
+    {
+      "source": "file:translations/nl/nl_test.go",
+      "target": "file:translations/nl/nl.go",
+      "kind": "tests"
+    },
+    {
+      "source": "file:translations/pl/pl.go",
+      "target": "file:translations/pl/pl_test.go",
+      "kind": "tests"
+    },
+    {
+      "source": "file:translations/pl/pl_test.go",
+      "target": "file:translations/pl/pl.go",
+      "kind": "tests"
+    },
+    {
+      "source": "file:translations/pt/pt.go",
+      "target": "file:translations/pt/pt_test.go",
+      "kind": "tests"
+    },
+    {
+      "source": "file:translations/pt/pt_test.go",
+      "target": "file:translations/pt/pt.go",
+      "kind": "tests"
+    },
+    {
+      "source": "file:translations/pt_BR/pt_BR.go",
+      "target": "file:translations/pt_BR/pt_BR_test.go",
+      "kind": "tests"
+    },
+    {
+      "source": "file:translations/pt_BR/pt_BR_test.go",
+      "target": "file:translations/pt_BR/pt_BR.go",
+      "kind": "tests"
+    },
+    {
+      "source": "file:translations/ru/ru.go",
+      "target": "file:translations/ru/ru_test.go",
+      "kind": "tests"
+    },
+    {
+      "source": "file:translations/ru/ru_test.go",
+      "target": "file:translations/ru/ru.go",
+      "kind": "tests"
+    },
+    {
+      "source": "file:translations/th/th.go",
+      "target": "file:translations/th/th_test.go",
+      "kind": "tests"
+    },
+    {
+      "source": "file:translations/th/th_test.go",
+      "target": "file:translations/th/th.go",
+      "kind": "tests"
+    },
+    {
+      "source": "file:translations/tr/tr.go",
+      "target": "file:translations/tr/tr_test.go",
+      "kind": "tests"
+    },
+    {
+      "source": "file:translations/tr/tr_test.go",
+      "target": "file:translations/tr/tr.go",
+      "kind": "tests"
+    },
+    {
+      "source": "file:translations/uk/uk.go",
+      "target": "file:translations/uk/uk_test.go",
+      "kind": "tests"
+    },
+    {
+      "source": "file:translations/uk/uk_test.go",
+      "target": "file:translations/uk/uk.go",
+      "kind": "tests"
+    },
+    {
+      "source": "file:translations/vi/vi.go",
+      "target": "file:translations/vi/vi_test.go",
+      "kind": "tests"
+    },
+    {
+      "source": "file:translations/vi/vi_test.go",
+      "target": "file:translations/vi/vi.go",
+      "kind": "tests"
+    },
+    {
+      "source": "file:translations/zh/zh.go",
+      "target": "file:translations/zh/zh_test.go",
+      "kind": "tests"
+    },
+    {
+      "source": "file:translations/zh/zh_test.go",
+      "target": "file:translations/zh/zh.go",
+      "kind": "tests"
+    },
+    {
+      "source": "file:translations/zh_tw/zh_tw.go",
+      "target": "file:translations/zh_tw/zh_tw_test.go",
+      "kind": "tests"
+    },
+    {
+      "source": "file:translations/zh_tw/zh_tw_test.go",
+      "target": "file:translations/zh_tw/zh_tw.go",
+      "kind": "tests"
+    },
+    {
+      "source": "file:validator.go",
+      "target": "file:validator_test.go",
+      "kind": "tests"
+    },
+    {
+      "source": "file:validator_test.go",
+      "target": "file:validator.go",
+      "kind": "tests"
+    },
+    {
+      "source": "file:_examples/http-transalations/main.go",
+      "target": "file:translations/en/en.go",
+      "kind": "imports"
+    },
+    {
+      "source": "file:_examples/http-transalations/main.go",
+      "target": "file:translations/zh/zh.go",
+      "kind": "imports"
+    },
+    {
+      "source": "file:_examples/http-transalations/main.go",
+      "target": "file:translations/zh/zh_test.go",
+      "kind": "imports"
+    },
+    {
+      "source": "file:_examples/http-transalations/main.go",
+      "target": "file:translations/zh_tw/zh_tw_test.go",
+      "kind": "imports"
+    },
+    {
+      "source": "file:_examples/translations/main.go",
+      "target": "file:translations/en/en.go",
+      "kind": "imports"
+    },
+    {
+      "source": "file:translations/ar/ar_test.go",
+      "target": "file:translations/en/en.go",
+      "kind": "imports"
+    },
+    {
+      "source": "file:translations/de/de_test.go",
+      "target": "file:translations/de/de.go",
+      "kind": "imports"
+    },
+    {
+      "source": "file:translations/en/en_test.go",
+      "target": "file:translations/en/en.go",
+      "kind": "imports"
+    },
+    {
+      "source": "file:translations/es/es_test.go",
+      "target": "file:translations/es/es.go",
+      "kind": "imports"
+    },
+    {
+      "source": "file:translations/fa/fa_test.go",
+      "target": "file:translations/en/en.go",
+      "kind": "imports"
+    },
+    {
+      "source": "file:translations/fr/fr_test.go",
+      "target": "file:translations/fr/fr.go",
+      "kind": "imports"
+    },
+    {
+      "source": "file:translations/id/id_test.go",
+      "target": "file:translations/id/id.go",
+      "kind": "imports"
+    },
+    {
+      "source": "file:translations/it/it_test.go",
+      "target": "file:translations/it/it.go",
+      "kind": "imports"
+    },
+    {
+      "source": "file:translations/ja/ja_test.go",
+      "target": "file:translations/ja/ja.go",
+      "kind": "imports"
+    },
+    {
+      "source": "file:translations/ko/ko_test.go",
+      "target": "file:translations/ko/ko.go",
+      "kind": "imports"
+    },
+    {
+      "source": "file:translations/lv/lv_test.go",
+      "target": "file:translations/en/en.go",
+      "kind": "imports"
+    },
+    {
+      "source": "file:translations/nl/nl_test.go",
+      "target": "file:translations/en/en.go",
+      "kind": "imports"
+    },
+    {
+      "source": "file:translations/pl/pl_test.go",
+      "target": "file:translations/pl/pl.go",
+      "kind": "imports"
+    },
+    {
+      "source": "file:translations/pt/pt_test.go",
+      "target": "file:translations/pt/pt.go",
+      "kind": "imports"
+    },
+    {
+      "source": "file:translations/pt_BR/pt_BR_test.go",
+      "target": "file:translations/pt_BR/pt_BR.go",
+      "kind": "imports"
+    },
+    {
+      "source": "file:translations/ru/ru_test.go",
+      "target": "file:validator.go",
+      "kind": "imports"
+    },
+    {
+      "source": "file:translations/ru/ru_test.go",
+      "target": "file:translations/ru/ru.go",
+      "kind": "imports"
+    },
+    {
+      "source": "file:translations/th/th_test.go",
+      "target": "file:translations/th/th.go",
+      "kind": "imports"
+    },
+    {
+      "source": "file:translations/tr/tr_test.go",
+      "target": "file:translations/tr/tr.go",
+      "kind": "imports"
+    },
+    {
+      "source": "file:translations/uk/uk_test.go",
+      "target": "file:translations/uk/uk.go",
+      "kind": "imports"
+    },
+    {
+      "source": "file:translations/vi/vi_test.go",
+      "target": "file:translations/vi/vi.go",
+      "kind": "imports"
+    },
+    {
+      "source": "file:translations/zh/zh_test.go",
+      "target": "file:translations/zh/zh.go",
+      "kind": "imports"
+    },
+    {
+      "source": "file:validator_test.go",
+      "target": "file:translations/en/en.go",
+      "kind": "imports"
+    },
+    {
+      "source": "file:validator_test.go",
+      "target": "file:translations/fr/fr.go",
+      "kind": "imports"
+    },
+    {
+      "source": "file:validator_test.go",
+      "target": "file:translations/nl/nl.go",
+      "kind": "imports"
+    }
+  ],
+  "seeds": []
+}

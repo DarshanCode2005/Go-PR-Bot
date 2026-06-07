@@ -1,0 +1,10 @@
+{
+  "iteration": 5,
+  "max_iterations": 5,
+  "failure_source": "test",
+  "error_summary": "$ go test -race ./... -count=1\n\n--- FAIL: TestUnixAddrValidation (0.00s)\n    validator_test.go:3048: Index: 0 unix_addr failed Error: Key: '' Error:Field validation for '' failed on the 'unix_addr' tag\nFAIL\nFAIL\tgithub.com/go-playground/validator/v10\t0.152s\nok  \tgithub.com/go-playground/validator/v10/non-standard/validators\t1.029s\nok  \tgithub.com/go-playground/validator/v10/translations/ar\t1.046s\nok  \tgithub.com/go-playground/validator/v10/translations/de\t1.047s\nok  \tgithub.com/go-playground/val",
+  "files": [
+    "baked_in.go"
+  ],
+  "review_round": null
+}

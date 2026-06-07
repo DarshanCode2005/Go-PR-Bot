@@ -183,6 +183,12 @@ flowchart LR
 
 **Full design:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 
+## Evaluation
+
+Sample end-to-end dry-run against [validator#1348](https://github.com/go-playground/validator/issues/1348): the pipeline ran plan → code → integrate → five fix loops → review → PR draft. Tests did not pass within the iteration cap; see the post-mortem for root cause, artifacts, and follow-up options.
+
+**Details:** [docs/EVALUATION.md](docs/EVALUATION.md) — includes checked-in artifacts under [`samples/f3934252-659f-48b2-a936-765c7e7869dd/`](samples/f3934252-659f-48b2-a936-765c7e7869dd/).
+
 ## Repository layout
 
 ```
@@ -195,6 +201,9 @@ pocket-fm-assignment/
   skills/                # Per-repo SKILL.md + _default
   docs/
     ARCHITECTURE.md
+    EVALUATION.md
+  samples/
+    f3934252-659f-48b2-a936-765c7e7869dd/   # validator #1348 dry-run artifacts
   tests/
   artifacts/             # Run outputs (gitignored)
   workspaces/            # Cloned repos (gitignored)

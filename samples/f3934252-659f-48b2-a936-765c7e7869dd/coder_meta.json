@@ -1,0 +1,18 @@
+{
+  "issue_number": 1348,
+  "repo": "go-playground/validator",
+  "files": [
+    {
+      "path": "baked_in.go",
+      "format": "search_replace",
+      "patch": "diff --git a/baked_in.go b/baked_in.go\nindex 41f6f27..d1e0465 100644\n--- a/baked_in.go\n+++ b/baked_in.go\n@@ -2801,7 +2801,7 @@ func isUnixAddrResolvable(fl FieldLevel) bool {\n \t\treturn false\n \t}\n \n-\treturn fileInfo.Mode().Type() == fs.ModeSocket\n+\treturn !fileInfo.IsDir() && (fileInfo.Mode()&fs.ModeSocket) == fs.ModeSocket\n }\n \n // isUnixDomainSocketExists is the validation function for validating if the field's value is an existing Unix domain socket.\n",
+      "search_replace_raw": "--- SEARCH\nfunc isUnixAddrResolvable(fl FieldLevel) bool {\n\taddr := fl.Field().String()\n\t_, err := net.ResolveUnixAddr(\"unix\", addr)\n\tif err != nil {\n\t\treturn false\n\t}\n\n\tfileInfo, err := os.Stat(addr)\n\tif err != nil {\n\t\treturn false\n\t}\n\n\treturn fileInfo.Mode().Type() == fs.ModeSocket\n}\n+++ REPLACE\nfunc isUnixAddrResolvable(fl FieldLevel) bool {\n\taddr := fl.Field().String()\n\t_, err := net.ResolveUnixAddr(\"unix\", addr)\n\tif err != nil {\n\t\treturn false\n\t}\n\n\tfileInfo, err := os.Stat(addr)\n\tif err != nil {\n\t\treturn false\n\t}\n\n\treturn !fileInfo.IsDir() && (fileInfo.Mode()&fs.ModeSocket) == fs.ModeSocket\n}"
+    }
+  ],
+  "combined_patch": "diff --git a/baked_in.go b/baked_in.go\nindex 41f6f27..d1e0465 100644\n--- a/baked_in.go\n+++ b/baked_in.go\n@@ -2801,7 +2801,7 @@ func isUnixAddrResolvable(fl FieldLevel) bool {\n \t\treturn false\n \t}\n \n-\treturn fileInfo.Mode().Type() == fs.ModeSocket\n+\treturn !fileInfo.IsDir() && (fileInfo.Mode()&fs.ModeSocket) == fs.ModeSocket\n }\n \n // isUnixDomainSocketExists is the validation function for validating if the field's value is an existing Unix domain socket.\n",
+  "execution_waves": [
+    [
+      "baked_in.go"
+    ]
+  ]
+}

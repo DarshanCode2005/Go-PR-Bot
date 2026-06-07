@@ -11,8 +11,7 @@ artifacts/
 checkpoints/
 .chroma/
 .gitignore
-docs/
 scripts/
 docs/GITHUB_ISSUES.md
-docs/
+docs/GITHUB_ISSUE_MAP.md
 IMPLEMENTATION_CONTEXT.md

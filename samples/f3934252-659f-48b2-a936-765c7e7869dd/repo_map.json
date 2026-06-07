@@ -1,0 +1,777 @@
+{
+  "repo": "go-playground/validator",
+  "repo_path": "/home/darshan/master/pocket-fm-assignment/workspaces/f3934252-659f-48b2-a936-765c7e7869dd/repo",
+  "go_mod": {
+    "module_path": "github.com/go-playground/validator/v10",
+    "go_version": "1.25.0"
+  },
+  "tree_depth": 4,
+  "tree": {
+    "name": "repo",
+    "type": "dir",
+    "children": [
+      {
+        "name": ".github",
+        "type": "dir",
+        "children": [
+          {
+            "name": "ISSUE_TEMPLATE",
+            "type": "dir",
+            "children": [
+              {
+                "name": "bug_report.yml",
+                "type": "file",
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "workflows",
+            "type": "dir",
+            "children": [
+              {
+                "name": "workflow.yml",
+                "type": "file",
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "CODEOWNERS",
+            "type": "file",
+            "children": []
+          },
+          {
+            "name": "CONTRIBUTING.md",
+            "type": "file",
+            "children": []
+          },
+          {
+            "name": "PULL_REQUEST_TEMPLATE.md",
+            "type": "file",
+            "children": []
+          },
+          {
+            "name": "dependabot.yml",
+            "type": "file",
+            "children": []
+          }
+        ]
+      },
+      {
+        "name": "_examples",
+        "type": "dir",
+        "children": [
+          {
+            "name": "custom",
+            "type": "dir",
+            "children": [
+              {
+                "name": "main.go",
+                "type": "file",
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "custom-validation",
+            "type": "dir",
+            "children": [
+              {
+                "name": "main.go",
+                "type": "file",
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "dive",
+            "type": "dir",
+            "children": [
+              {
+                "name": "main.go",
+                "type": "file",
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "gin-upgrading-overriding",
+            "type": "dir",
+            "children": [
+              {
+                "name": "main.go",
+                "type": "file",
+                "children": []
+              },
+              {
+                "name": "v8_to_v9.go",
+                "type": "file",
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "http-transalations",
+            "type": "dir",
+            "children": [
+              {
+                "name": "main.go",
+                "type": "file",
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "map-validation",
+            "type": "dir",
+            "children": [
+              {
+                "name": "main.go",
+                "type": "file",
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "simple",
+            "type": "dir",
+            "children": [
+              {
+                "name": "main.go",
+                "type": "file",
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "struct-level",
+            "type": "dir",
+            "children": [
+              {
+                "name": "main.go",
+                "type": "file",
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "struct-map-rules-validation",
+            "type": "dir",
+            "children": [
+              {
+                "name": "main.go",
+                "type": "file",
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "translations",
+            "type": "dir",
+            "children": [
+              {
+                "name": "main.go",
+                "type": "file",
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "validate_fn",
+            "type": "dir",
+            "children": [
+              {
+                "name": "enum_enumer.go",
+                "type": "file",
+                "children": []
+              },
+              {
+                "name": "go.mod",
+                "type": "file",
+                "children": []
+              },
+              {
+                "name": "go.sum",
+                "type": "file",
+                "children": []
+              },
+              {
+                "name": "main.go",
+                "type": "file",
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "valuer",
+            "type": "dir",
+            "children": [
+              {
+                "name": "main.go",
+                "type": "file",
+                "children": []
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "non-standard",
+        "type": "dir",
+        "children": [
+          {
+            "name": "validators",
+            "type": "dir",
+            "children": [
+              {
+                "name": "notblank.go",
+                "type": "file",
+                "children": []
+              },
+              {
+                "name": "notblank_test.go",
+                "type": "file",
+                "children": []
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "testdata",
+        "type": "dir",
+        "children": [
+          {
+            "name": "a.go",
+            "type": "file",
+            "children": []
+          },
+          {
+            "name": "music.mp3",
+            "type": "file",
+            "children": []
+          }
+        ]
+      },
+      {
+        "name": "translations",
+        "type": "dir",
+        "children": [
+          {
+            "name": "ar",
+            "type": "dir",
+            "children": [
+              {
+                "name": "ar.go",
+                "type": "file",
+                "children": []
+              },
+              {
+                "name": "ar_test.go",
+                "type": "file",
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "de",
+            "type": "dir",
+            "children": [
+              {
+                "name": "de.go",
+                "type": "file",
+                "children": []
+              },
+              {
+                "name": "de_test.go",
+                "type": "file",
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "en",
+            "type": "dir",
+            "children": [
+              {
+                "name": "en.go",
+                "type": "file",
+                "children": []
+              },
+              {
+                "name": "en_test.go",
+                "type": "file",
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "es",
+            "type": "dir",
+            "children": [
+              {
+                "name": "es.go",
+                "type": "file",
+                "children": []
+              },
+              {
+                "name": "es_test.go",
+                "type": "file",
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "fa",
+            "type": "dir",
+            "children": [
+              {
+                "name": "fa.go",
+                "type": "file",
+                "children": []
+              },
+              {
+                "name": "fa_test.go",
+                "type": "file",
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "fr",
+            "type": "dir",
+            "children": [
+              {
+                "name": "fr.go",
+                "type": "file",
+                "children": []
+              },
+              {
+                "name": "fr_test.go",
+                "type": "file",
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "id",
+            "type": "dir",
+            "children": [
+              {
+                "name": "id.go",
+                "type": "file",
+                "children": []
+              },
+              {
+                "name": "id_test.go",
+                "type": "file",
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "it",
+            "type": "dir",
+            "children": [
+              {
+                "name": "it.go",
+                "type": "file",
+                "children": []
+              },
+              {
+                "name": "it_test.go",
+                "type": "file",
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "ja",
+            "type": "dir",
+            "children": [
+              {
+                "name": "ja.go",
+                "type": "file",
+                "children": []
+              },
+              {
+                "name": "ja_test.go",
+                "type": "file",
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "ko",
+            "type": "dir",
+            "children": [
+              {
+                "name": "ko.go",
+                "type": "file",
+                "children": []
+              },
+              {
+                "name": "ko_test.go",
+                "type": "file",
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "lv",
+            "type": "dir",
+            "children": [
+              {
+                "name": "lv.go",
+                "type": "file",
+                "children": []
+              },
+              {
+                "name": "lv_test.go",
+                "type": "file",
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "nl",
+            "type": "dir",
+            "children": [
+              {
+                "name": "nl.go",
+                "type": "file",
+                "children": []
+              },
+              {
+                "name": "nl_test.go",
+                "type": "file",
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "pl",
+            "type": "dir",
+            "children": [
+              {
+                "name": "pl.go",
+                "type": "file",
+                "children": []
+              },
+              {
+                "name": "pl_test.go",
+                "type": "file",
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "pt",
+            "type": "dir",
+            "children": [
+              {
+                "name": "pt.go",
+                "type": "file",
+                "children": []
+              },
+              {
+                "name": "pt_test.go",
+                "type": "file",
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "pt_BR",
+            "type": "dir",
+            "children": [
+              {
+                "name": "pt_BR.go",
+                "type": "file",
+                "children": []
+              },
+              {
+                "name": "pt_BR_test.go",
+                "type": "file",
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "ru",
+            "type": "dir",
+            "children": [
+              {
+                "name": "ru.go",
+                "type": "file",
+                "children": []
+              },
+              {
+                "name": "ru_test.go",
+                "type": "file",
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "th",
+            "type": "dir",
+            "children": [
+              {
+                "name": "th.go",
+                "type": "file",
+                "children": []
+              },
+              {
+                "name": "th_test.go",
+                "type": "file",
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "tr",
+            "type": "dir",
+            "children": [
+              {
+                "name": "tr.go",
+                "type": "file",
+                "children": []
+              },
+              {
+                "name": "tr_test.go",
+                "type": "file",
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "uk",
+            "type": "dir",
+            "children": [
+              {
+                "name": "uk.go",
+                "type": "file",
+                "children": []
+              },
+              {
+                "name": "uk_test.go",
+                "type": "file",
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "vi",
+            "type": "dir",
+            "children": [
+              {
+                "name": "vi.go",
+                "type": "file",
+                "children": []
+              },
+              {
+                "name": "vi_test.go",
+                "type": "file",
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "zh",
+            "type": "dir",
+            "children": [
+              {
+                "name": "zh.go",
+                "type": "file",
+                "children": []
+              },
+              {
+                "name": "zh_test.go",
+                "type": "file",
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "zh_tw",
+            "type": "dir",
+            "children": [
+              {
+                "name": "zh_tw.go",
+                "type": "file",
+                "children": []
+              },
+              {
+                "name": "zh_tw_test.go",
+                "type": "file",
+                "children": []
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": ".gitignore",
+        "type": "file",
+        "children": []
+      },
+      {
+        "name": ".golangci.yaml",
+        "type": "file",
+        "children": []
+      },
+      {
+        "name": "CLAUDE.md",
+        "type": "file",
+        "children": []
+      },
+      {
+        "name": "LICENSE",
+        "type": "file",
+        "children": []
+      },
+      {
+        "name": "MAINTAINERS.md",
+        "type": "file",
+        "children": []
+      },
+      {
+        "name": "Makefile",
+        "type": "file",
+        "children": []
+      },
+      {
+        "name": "README.md",
+        "type": "file",
+        "children": []
+      },
+      {
+        "name": "baked_in.go",
+        "type": "file",
+        "children": []
+      },
+      {
+        "name": "benchmarks_test.go",
+        "type": "file",
+        "children": []
+      },
+      {
+        "name": "cache.go",
+        "type": "file",
+        "children": []
+      },
+      {
+        "name": "country_codes.go",
+        "type": "file",
+        "children": []
+      },
+      {
+        "name": "currency_codes.go",
+        "type": "file",
+        "children": []
+      },
+      {
+        "name": "doc.go",
+        "type": "file",
+        "children": []
+      },
+      {
+        "name": "errors.go",
+        "type": "file",
+        "children": []
+      },
+      {
+        "name": "field_level.go",
+        "type": "file",
+        "children": []
+      },
+      {
+        "name": "go.mod",
+        "type": "file",
+        "children": []
+      },
+      {
+        "name": "go.sum",
+        "type": "file",
+        "children": []
+      },
+      {
+        "name": "language_codes.go",
+        "type": "file",
+        "children": []
+      },
+      {
+        "name": "logo.png",
+        "type": "file",
+        "children": []
+      },
+      {
+        "name": "no_validate_fn.go",
+        "type": "file",
+        "children": []
+      },
+      {
+        "name": "options.go",
+        "type": "file",
+        "children": []
+      },
+      {
+        "name": "postcode_regexes.go",
+        "type": "file",
+        "children": []
+      },
+      {
+        "name": "regexes.go",
+        "type": "file",
+        "children": []
+      },
+      {
+        "name": "struct_level.go",
+        "type": "file",
+        "children": []
+      },
+      {
+        "name": "translations.go",
+        "type": "file",
+        "children": []
+      },
+      {
+        "name": "util.go",
+        "type": "file",
+        "children": []
+      },
+      {
+        "name": "validate_fn.go",
+        "type": "file",
+        "children": []
+      },
+      {
+        "name": "validator.go",
+        "type": "file",
+        "children": []
+      },
+      {
+        "name": "validator_instance.go",
+        "type": "file",
+        "children": []
+      },
+      {
+        "name": "validator_test.go",
+        "type": "file",
+        "children": []
+      }
+    ]
+  },
+  "top_level_packages": [
+    "_examples",
+    "non-standard",
+    "testdata",
+    "translations"
+  ],
+  "skipped_dirs": [
+    ".git",
+    "vendor"
+  ]
+}

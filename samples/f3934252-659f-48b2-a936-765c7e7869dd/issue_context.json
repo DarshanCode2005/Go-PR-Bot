@@ -1,0 +1,72 @@
+{
+  "repo": "go-playground/validator",
+  "number": 1348,
+  "title": "bug: unix_addr check is useless",
+  "body": "- [ x] I have looked at the documentation [here](https://pkg.go.dev/github.com/go-playground/validator/v10#section-documentation) first?\r\n- [ x] I have looked at the examples provided that may showcase my question [here](/_examples)?\r\n\r\n### Package version eg. v9, v10: \r\nv10.23.0 \r\n\r\n\r\n### Issue, Question or Enhancement:\r\n\r\nThe unix_addr check is useless. I looked into the src:\r\n\r\nhttps://github.com/go-playground/validator/blob/6c3307e6c64040ebc0efffe9366927c68146ffba/baked_in.go#L2564C16-L2564C31\r\n\r\n```go\r\nfunc isUnixAddrResolvable(fl FieldLevel) bool {\r\n\t_, err := net.ResolveUnixAddr(\"unix\", fl.Field().String())\r\n\r\n\treturn err == nil\r\n}\r\n```\r\n\r\nand in stdlib net:\r\n\r\nhttps://cs.opensource.google/go/go/+/refs/tags/go1.23.4:src/net/unixsock.go;l=57\r\n\r\n```go\r\nfunc ResolveUnixAddr(network, address string) (*UnixAddr, error) {\r\n\tswitch network {\r\n\tcase \"unix\", \"unixgram\", \"unixpacket\":\r\n\t\treturn &UnixAddr{Name: address, Net: network}, nil\r\n\tdefault:\r\n\t\treturn nil, UnknownNetworkError(network)\r\n\t}\r\n}\r\n```\r\n\r\neffectively this will never throw an error, since you're always passing \"unix\".\r\n\r\nIn fact, ResolveUnixAddr is itself useless to check if the socket actually exists.\r\n\r\nYou need something that checks if the file exists and if that file is a socket:\r\n\r\n```go\r\nfunc IsSocket(filePath string) (err error) {\r\n\tstats, err := os.Stat(filePath)\r\n\tif err != nil {\r\n\t\terr = fmt.Errorf(\"check file existence: %w\", err)\r\n\t\treturn\r\n\t}\r\n\tif stats.Mode().Type() != fs.ModeSocket {\r\n\t\terr = fmt.Errorf(\"not socket file: %v\", filePath)\r\n\t\treturn\r\n\t}\r\n\treturn\r\n}\r\n```\r\n\r\n\r\n",
+  "labels": [
+    "good first issue"
+  ],
+  "state": "open",
+  "comments": [
+    {
+      "author": "nodivbyzero",
+      "body": "I'm not entirely sure about the original design intention for this validator. It might have been intended to validate input values exclusively for the 'Unix' network. However, it would be beneficial to extend its functionality to also handle `unixgram` and `unixpacket` networks. \r\n\r\nWe always welcome pull requests with improvements or fixes.\r\n\r\nI suggest creating a new `socket` validator and implementing it with the approach you provided.\r\n",
+      "created_at": "2024-12-19T00:30:48Z"
+    },
+    {
+      "author": "nf-brentsaner",
+      "body": "A \"socket\" does not inherently mean a UDS/IPC socket. `tcp,127.0.0.1:1234` is a \"socket\".\n\nIf anything, it explicitly should be called \"ipc\" (\"Inter-Process Communication\") or \"uds\" (UNIX Domain Socket).\n\n`socket` as a validator name should be applicable to all of the above cases (see also #1327).",
+      "created_at": "2025-03-27T05:06:17Z"
+    },
+    {
+      "author": "junaid2005p",
+      "body": "I went through the issue. @nf-brentsaner is right about the fact that socket can mean many things(tcp, uds, etc). So it probably will not be a good idea to name the validator as 'socket' if it just validates UDS. \nI think we have a few options here \n1. We could just build an UDS validator and name it as UDS or IPC\n2. We could try building a proper Socket validator ( supporting tcp,uds etc). But that will involve adding support for quite a lot of socket types.\n3. We could try incrementally adding validation for each socket types for example an UDS validator a TCP validator and so on.\n\nI propose we build out the socket validations for each type one by one. Once we are confident we have considered all cases we can debate about if we merge all of them into a 'socket' validator.\n@nodivbyzero @deankarn Kindly look into this.",
+      "created_at": "2025-07-06T05:00:04Z"
+    },
+    {
+      "author": "deankarn",
+      "body": "> I propose we build out the socket validations for each type one by one. Once we are confident we have considered all cases we can debate about if we merge all of them into a 'socket' validator.\n@nodivbyzero @deankarn Kindly look into this.\n\nI think this makes sense, and when all use cases are covered then can register a socket alias validation, just like how color one works.",
+      "created_at": "2025-07-06T17:36:25Z"
+    },
+    {
+      "author": "junaid2005p",
+      "body": "Okay so I was working to create a new UDS validate tag. I ran into some interesting questions.\n\n```go\n// IsSocket checks if the given file path exists and is a Unix domain socket\nfunc IsSocket(filePath string) error {\n    stats, err := os.Stat(filePath)\n    if err != nil {\n        return fmt.Errorf(\"check file existence: %w\", err)\n    }\n    if stats.Mode().Type() != fs.ModeSocket {\n        return fmt.Errorf(\"not socket file: %v\", filePath)\n    }\n    return nil\n}\n```\nThis checks if the file exists at that path and is a valid socket file.\n\nBut this fails for certain scenarios like\n1. Some servers create the socket at runtime. So although there is a valid path since no file exists this code will say its an invalid UDS because the file does not exist yet\n2. I am not sure how to validate abstract sockets using this approach (example - \"@socket1\")\n\nHowever I still think we should stick with the original approach of checking if the file exists and it it is a socket. The reason is if we build a rule based validator that checks if the file path is a valid socket file path, that may result in false positives.\n\nFor example let us say I give the path as \"/tmp/socket1.sock\". This is a valid file path but assume I do not actually create a file at this location.\n\nThe rule based validator will treat this as valid since its a valid file path but if for some reason I never end up creating the file at this path then this would be a false positive.\n\n@deankarn @nodivbyzero kindly look into this.",
+      "created_at": "2025-07-07T05:05:55Z"
+    },
+    {
+      "author": "nf-brentsaner",
+      "body": "1. The `filepath` validator could be used instead in this case. Assuming it's not an abstract socket, of course. Or an `optional` option in the tag, which wouldn't fail if the socket path didn't exist at invocation.\n2. This is a much trickier answer; the syntax works for me since that's generally what abstract sockets use. Checking their existence would like wise be easy. The `optional` option above, however, would likely need to lead to validation against the name itself. (I think as long as it's a POSIX \"portable filename\" match, it's a valid abstract socket name.)",
+      "created_at": "2025-07-07T07:21:26Z"
+    },
+    {
+      "author": "junaid2005p",
+      "body": "@nf-brentsaner Thanks for the insight. I absolutely agree with you. \nBased on our discussion I propose we add 2 validation tags\n1. uds_path -> This just checks if the file path is a valid UDS socket path (both normal and abstract) using certain rules. This does not actually check if the file exists. For abstract paths it will just check if it is a POSIX \"portable filename\". \n2. uds_exists -> This checks if the file actually exists at the given file path and if it is a socket. Obviously 'uds_exists' will not work with abstract sockets. It is meant only for filesystem paths.\n\nAlso we could use `filepath` to validate if its a valid filepath but we also need to check if the file path is less than equal to 107 characters in linux and 104 characters on MAC OS X 10.9\n\nSource: [https://unix.stackexchange.com/questions/367008/why-is-socket-path-length-limited-to-a-hundred-chars](url)\n\n@deankarn @nodivbyzero  Kindly let me know if I missed anything.",
+      "created_at": "2025-07-07T12:17:54Z"
+    },
+    {
+      "author": "kitosforos",
+      "body": "Hi! I am looking to get my first open source contribution, and I would like to help in this library. It is okey if I craft an MR with the 2 validation tags that @JunaidIslam2105 proposed?\n\ncc: @deankarn as maintainer. (I don't know who to ping)",
+      "created_at": "2025-10-04T19:35:39Z"
+    },
+    {
+      "author": "deankarn",
+      "body": "By all means @kitosforos , PR's are always welcome",
+      "created_at": "2025-10-05T16:21:59Z"
+    },
+    {
+      "author": "nf-brentsaner",
+      "body": "@kitosforos Nice!\n\nFor some starter hints, at least on *Linux* the `uds_exists` is fairly easy but with some caveats.\n\nFor abstract sockets, you'd need to read `/proc/net/unix`.\nIt can be read as a regular text file, each socket is defined per-line, and (this is the important bit) it **also includes the aforementioned \"abstract sockets\"**. Its format is described in [`proc_pid_net(5)`](https://www.mankier.com/5/proc_pid_net#Description-/proc/net/unix). This is actually the *only* way I can think of to test abstract socket existence, aside from actually trying to connect to it.\n\nOnly Linux, to my knowledge, has [abstract sockets](https://man.archlinux.org/man/unix.7#abstract), but they're essentially sockets that *only* exist in memory/in-kernel - they have no corresponding filesystem path, just a reference name. Their name technically begins with a `NUL` (`0x00`), but that's usually replaced with `@` in textual/visual/human representation.\n\nFor example, an abstract socket in `/proc/net/unix` looks like this (in this case, this one was created by `iscsid`, some fields were changed):\n\n```\n01234567890abcdef: 00000000 00000000 00010000 0001 01 01234 @ISCSID_UIP_ABSTRACT_NAMESPACE\n```\n\nYou unfortunately can't entirely rely on ONLY parsing this file, as processes can also use relative paths for sockets or may be chrooted. For example, for e.g. Postfix on an AlmaLinux 9.6 system, its postfix sockets have lines like:\n\n```\n01234567890abcdef: 00000000 00000000 00010000 0001 01 01234 private/smtp\n```\n\nNow, its mere existence *in* this file indicates that the socket DOES exist, but the actual socket file in this case is `/var/spool/postfix/private/smtp`:\n\n```\n# stat /var/spool/postfix/private/smtp\n  File: /var/spool/postfix/private/smtp\n  Size: 0               Blocks: 0          IO Block: 4096   socket\nDevice: fd00h/64768d    Inode: 202450695   Links: 1\nAccess: (0666/srw-rw-rw-)  Uid: (   89/ postfix)   Gid: (   89/ postfix)\nContext: system_u:object_r:postfix_private_t:s0\nAccess: 2025-10-09 06:20:32.183056177 +0000\nModify: 2025-10-04 04:50:00.473000000 +0000\nChange: 2025-10-04 04:50:00.473000000 +0000\n Birth: 2025-10-04 04:50:00.473000000 +0000\n```\n\n(And no, the `inode` field in `/proc/net/unix` will not correspond to the `Inode` in the stat, and that's expected).\n\nAll of that complicates validation, so I'd recommend the following basic logic:\n\n```go\n// ...\n\nif runtime.GOOS == \"linux\" && strings.HasPrefix(sockpath, \"@\") {\n    // read/parse /proc/net/unix and look for sockpath in the last field for each line\n} else {\n    // check the actual path on the filesystem using e.g. `filepath` validator\n}\n\n// ...\n```\n\nwhich *should* properly work in \"expected\" ways in all cases.",
+      "created_at": "2025-10-09T16:16:29Z"
+    },
+    {
+      "author": "kitosforos",
+      "body": "@nf-brentsaner thanks for the context! Appreciate the effort 🙇🏼‍♂️\n\nHowever, I was thinking about this. I am currently developing on a Mac, so it would be difficult for me to test this implementation. I think I have to step back and find another issue.",
+      "created_at": "2025-10-11T13:02:32Z"
+    },
+    {
+      "author": "nf-brentsaner",
+      "body": "> I am currently developing on a Mac, so it would be difficult for me to test this implementation. I think I have to step back and find another issue.\n\n@kitosforos no need!\n\nhttps://mac.getutm.app/ (it's free if you download it from their site, 10USD in the App Store otherwise)\nthey have a ton of ready-to-go VM images here: https://mac.getutm.app/gallery/\n\nthere's also Parallels Desktop, which is very much NOT free, but has a free trial.\n\nhttps://www.parallels.com/products/desktop/buy/?full",
+      "created_at": "2025-10-12T01:55:34Z"
+    }
+  ]
+}

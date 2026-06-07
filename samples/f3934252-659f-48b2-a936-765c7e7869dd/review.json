@@ -1,0 +1,13 @@
+{
+  "decision": "reject",
+  "comments": [
+    "max fix iterations (5) exceeded after iteration 5"
+  ],
+  "checklist": {
+    "acceptance_criteria": false,
+    "tests": false,
+    "api_breaks": false,
+    "style": false,
+    "error_messages": false
+  }
+}
