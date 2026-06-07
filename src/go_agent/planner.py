@@ -12,7 +12,7 @@ from go_agent.context_builder import ContextBundle
 from go_agent.github_issues import IssueContext
 from go_agent.llm_client import complete, llm_available
 from go_agent.run_context import RunContext
-from go_agent.skills import load_skill_text
+from go_agent.skills import format_skill_prompt
 from go_agent.utils import normalize_file_path
 
 PLANNER_SYSTEM_PROMPT = """You are a senior Go open-source maintainer planning a minimal fix for a GitHub issue.
@@ -168,7 +168,7 @@ def build_planner_messages(
     correction: str | None = None,
 ) -> list[dict[str, str]]:
     """Build system + user messages for the planner LLM call."""
-    skill_text = load_skill_text(issue.repo)
+    skill_section = format_skill_prompt(issue.repo)
     hints_text = ", ".join(scope_hints[:30]) or "(none)"
     bundle_text = _bundle_excerpt(context_bundle, max_chars=max_context_chars)
     body = issue.body[:_MAX_ISSUE_BODY_CHARS].strip()
@@ -180,8 +180,8 @@ def build_planner_messages(
         f"Scope hints: {hints_text}",
         f"Context bundle ({len(context_bundle.files)} files):\n{bundle_text or '(empty)'}",
     ]
-    if skill_text:
-        user_parts.append(f"Repo skill notes:\n{skill_text}")
+    if skill_section:
+        user_parts.append(skill_section)
     if correction:
         user_parts.append(correction)
 
