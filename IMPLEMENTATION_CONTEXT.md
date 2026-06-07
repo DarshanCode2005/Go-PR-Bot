@@ -36,6 +36,7 @@ Step-by-step record of what was built for each backlog item in [Go-PR-Bot](https
 | #26 Review agent | [#27](https://github.com/DarshanCode2005/Go-PR-Bot/issues/27) | Done |
 | #27 Review format/lint context | [#28](https://github.com/DarshanCode2005/Go-PR-Bot/issues/28) | Done |
 | #28 Review fix loop | [#29](https://github.com/DarshanCode2005/Go-PR-Bot/issues/29) | Done |
+| #29 Skill loader + agent injection | [#30](https://github.com/DarshanCode2005/Go-PR-Bot/issues/30) | Done |
 | #31 Skill: go-playground/validator | [#32](https://github.com/DarshanCode2005/Go-PR-Bot/issues/32) | Done |
 
 ---
@@ -88,7 +89,7 @@ go-agent resume --run-id <uuid>
 
 **Approved repos:** `gin-gonic/gin`, `spf13/cobra`, `go-playground/validator`, `golangci/golangci-lint`
 
-**Test suite:** 240 tests, `pytest -q && ruff check src tests`
+**Test suite:** 261 tests, `pytest -q && ruff check src tests`
 
 ---
 
@@ -1729,6 +1730,46 @@ pytest -q && ruff check src tests
 
 ---
 
+### Backlog #29 — Skill loader + agent injection
+
+**GitHub:** [#30](https://github.com/DarshanCode2005/Go-PR-Bot/issues/30)  
+**Commit:** (pending) `feat(skills): load repo skills into planner, coder, reviewer (fixes #30)`  
+**PR:** (pending)
+
+#### What was built
+
+**`skills.py`**
+
+- `resolve_skill_path()` — returns `skills/{repo_slug}/SKILL.md` or `skills/_default/SKILL.md`
+- `skill_body_for_prompt()` — strips YAML frontmatter before LLM injection
+- `format_skill_prompt()` — shared `Repo skill notes:` block with optional `max_chars`
+- `load_skill_text()` unchanged for test/lint command resolution
+
+**Agent prompt injection**
+
+- `planner.build_planner_messages()` — full skill body (no frontmatter)
+- `reviewer.build_review_messages()` — skill truncated to 2000 chars
+- `coder.build_coder_messages()` — skill truncated to 2000 chars (new)
+
+#### Key decisions
+
+- Unknown repo falls back to `skills/_default/SKILL.md` (acceptance criterion)
+- Frontmatter kept for `resolve_test_commands` / `resolve_lint_commands` only
+- Single helper avoids duplicated injection format across three agents
+
+#### Tests
+
+- `tests/test_skills_loader.py` — path resolution, default fallback, frontmatter strip, planner/reviewer/coder injection
+
+#### Verification
+
+```bash
+pytest tests/test_skills_loader.py -q
+pytest -q && ruff check src tests
+```
+
+---
+
 ### Backlog #31 — Skill: go-playground/validator
 
 **GitHub:** [#32](https://github.com/DarshanCode2005/Go-PR-Bot/issues/32)  
@@ -1864,4 +1905,4 @@ See `.env.example` and `config.py`. Minimum for current pipeline:
 
 ---
 
-*Last updated: after Backlog #28 (GitHub #29) and #31 (GitHub #32) — review fix loop; go-playground/validator repo skill.*
+*Last updated: after Backlog #29 (GitHub #30) — repo skill loader and LLM injection for planner, coder, reviewer.*

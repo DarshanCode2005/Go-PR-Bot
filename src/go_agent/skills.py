@@ -44,14 +44,41 @@ def _split_inline_bracket_list(inline: str) -> list[str]:
     return items
 
 
-def load_skill_text(repo: str) -> str:
-    """Load repo skill markdown, falling back to skills/_default/SKILL.md."""
+def resolve_skill_path(repo: str) -> Path | None:
+    """Return the skill file path used for a repo (repo-specific or _default)."""
     repo_skill = _SKILLS_ROOT / repo_slug(repo) / "SKILL.md"
     default_skill = _SKILLS_ROOT / "_default" / "SKILL.md"
     path = repo_skill if repo_skill.is_file() else default_skill
-    if not path.is_file():
+    return path if path.is_file() else None
+
+
+def load_skill_text(repo: str) -> str:
+    """Load repo skill markdown, falling back to skills/_default/SKILL.md."""
+    path = resolve_skill_path(repo)
+    if path is None:
         return ""
     return path.read_text(encoding="utf-8").strip()
+
+
+def skill_body_for_prompt(skill_text: str) -> str:
+    """Return skill markdown body with YAML frontmatter removed for LLM prompts."""
+    if not skill_text.strip():
+        return ""
+    if skill_text.startswith("---"):
+        parts = skill_text.split("---", 2)
+        if len(parts) >= 3:
+            return parts[2].strip()
+    return skill_text.strip()
+
+
+def format_skill_prompt(repo: str, *, max_chars: int | None = None) -> str | None:
+    """Format repo skill notes for injection into agent prompts."""
+    body = skill_body_for_prompt(load_skill_text(repo))
+    if not body:
+        return None
+    if max_chars is not None:
+        body = body[:max_chars]
+    return f"Repo skill notes:\n{body}"
 
 
 def _parse_frontmatter_list_commands(skill_text: str, key: str) -> list[str] | None:

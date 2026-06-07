@@ -17,7 +17,7 @@ from go_agent.lint_runner import LintFinding, format_finding
 from go_agent.llm_client import complete, llm_available
 from go_agent.planner import FixPlan
 from go_agent.run_context import RunContext
-from go_agent.skills import load_skill_text
+from go_agent.skills import format_skill_prompt
 
 ReviewDecision = Literal["approve", "request_changes", "reject"]
 
@@ -225,7 +225,7 @@ def build_review_messages(
     ac_text = "\n".join(f"- {item}" for item in plan.acceptance_criteria) or "(none)"
     steps_text = "\n".join(f"- {item}" for item in plan.steps) or "(none)"
     files_text = ", ".join(context.changed_files) or "(unknown)"
-    skill_text = load_skill_text(issue.repo)
+    skill_section = format_skill_prompt(issue.repo, max_chars=2000)
 
     gofmt_section = context.gofmt_diff or "(clean — no formatting diff)"
     vet_section = context.vet_output or context.lint_output or "(no vet/lint output)"
@@ -243,8 +243,8 @@ def build_review_messages(
         f"Vet / lint output:\n{vet_section}",
         f"Patch diff:\n{context.patch_text or '(empty)'}",
     ]
-    if skill_text:
-        user_parts.append(f"Repo skill notes:\n{skill_text[:2000]}")
+    if skill_section:
+        user_parts.append(skill_section)
     if correction:
         user_parts.append(correction)
 

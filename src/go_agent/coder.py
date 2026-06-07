@@ -17,6 +17,7 @@ from go_agent.context_builder import ContextBundle, ContextFileEntry
 from go_agent.github_issues import IssueContext
 from go_agent.llm_client import complete, llm_available
 from go_agent.planner import FixPlan
+from go_agent.skills import format_skill_prompt
 from go_agent.utils import normalize_file_path
 from go_agent.run_context import RunContext
 
@@ -402,6 +403,9 @@ def build_coder_messages(
         )
     if dependency_context:
         context_bits.append(f"Dependency context:\n{dependency_context}")
+    skill_section = format_skill_prompt(issue.repo, max_chars=2000)
+    if skill_section:
+        context_bits.append(skill_section)
     if correction:
         context_bits.append(correction)
     return [
