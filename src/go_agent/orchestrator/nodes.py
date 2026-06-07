@@ -7,10 +7,12 @@ from pathlib import Path
 from go_agent.coder import build_proposed_patch, write_coder_artifact
 from go_agent.config import get_settings
 from go_agent.fixer import (
+    PlanExpansion,
     build_corrective_patch,
     build_failure_context,
     build_review_fix_context,
     write_fix_meta,
+    write_plan_expansion,
 )
 from go_agent.fixer import FixMeta
 from go_agent.integrator import integrate_file_patches, write_integrator_artifact
@@ -263,7 +265,7 @@ def fix_node(state: AgentState) -> AgentState:
             fix_context.failure_source,
         )
 
-    artifact = build_corrective_patch(
+    patch_result = build_corrective_patch(
         repo_path,
         issue,
         plan,
@@ -272,7 +274,21 @@ def fix_node(state: AgentState) -> AgentState:
         settings,
         logger=logger,
     )
+    artifact = patch_result.artifact
+    expansion = patch_result.expansion
     write_coder_artifact(ctx, artifact)
+
+    if expansion.added_files:
+        write_plan_expansion(
+            ctx,
+            PlanExpansion(
+                iteration=fix_context.iteration,
+                original_files=list(plan.files),
+                added_files=list(expansion.added_files),
+                failing_tests=list(expansion.failing_tests),
+                reason=expansion.reason,
+            ),
+        )
     if fix_context.failure_source == "test":
         error_summary = fix_context.test_output[:500]
     elif fix_context.failure_source == "review":
@@ -294,6 +310,7 @@ def fix_node(state: AgentState) -> AgentState:
         "status": "fixing",
         "last_node": "fix",
         "iteration": fix_context.iteration,
+        "fix_plan": plan.model_copy(update={"files": expansion.target_files}).model_dump(),
     }
     if fix_context.failure_source == "review":
         result["review_round"] = fix_context.review_round

@@ -144,12 +144,21 @@ def test_build_corrective_patch_with_mock_llm(tmp_path, monkeypatch):
         ),
         __import__("go_agent.config", fromlist=["Settings"]).Settings(),
     )
-    assert artifact.files
-    assert artifact.combined_patch
+    assert artifact.artifact.files
+    assert artifact.artifact.combined_patch
 
 
 def test_build_corrective_patch_requires_api_key(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
+    for key in (
+        "OPENAI_API_KEY",
+        "ANTHROPIC_API_KEY",
+        "GROQ_API_KEY",
+        "XAI_API_KEY",
+        "GEMINI_API_KEY",
+        "GOOGLE_API_KEY",
+    ):
+        monkeypatch.delenv(key, raising=False)
     from go_agent.config import clear_settings_cache
 
     clear_settings_cache()
@@ -188,9 +197,10 @@ def test_expand_fix_files_adds_mentioned_test_file(tmp_path):
         failure_source="test",
         test_output="--- FAIL: TestUnixAddrValidation (0.00s)\n    validator_test.go:123: assertion failed",
     )
-    expanded = expand_fix_files(plan, ctx, repo_path)
-    assert "baked_in.go" in expanded
-    assert "validator_test.go" in expanded
+    settings = __import__("go_agent.config", fromlist=["Settings"]).Settings()
+    expanded = expand_fix_files(plan, ctx, repo_path, settings)
+    assert "baked_in.go" in expanded.target_files
+    assert "validator_test.go" in expanded.target_files
 
 
 def test_expand_fix_files_skips_unknown_paths(tmp_path):
@@ -206,8 +216,9 @@ def test_expand_fix_files_skips_unknown_paths(tmp_path):
         failure_source="test",
         test_output="FAIL: missing.go:10: undefined",
     )
-    expanded = expand_fix_files(plan, ctx, repo_path)
-    assert expanded == ["main.go"]
+    settings = __import__("go_agent.config", fromlist=["Settings"]).Settings()
+    expanded = expand_fix_files(plan, ctx, repo_path, settings)
+    assert expanded.target_files == ["main.go"]
 
 
 def test_expand_fix_files_caps_extra_files(tmp_path):
@@ -230,9 +241,10 @@ def test_expand_fix_files_caps_extra_files(tmp_path):
         failure_source="test",
         test_output="FAIL b_test.go c_test.go d_test.go",
     )
-    expanded = expand_fix_files(plan, ctx, repo_path, max_extra=2)
-    assert len(expanded) == 3
-    assert expanded[0] == "a.go"
+    settings = __import__("go_agent.config", fromlist=["Settings"]).Settings()
+    expanded = expand_fix_files(plan, ctx, repo_path, settings, max_extra=2)
+    assert len(expanded.target_files) == 3
+    assert expanded.target_files[0] == "a.go"
 
 
 def test_write_fix_meta_artifact(tmp_path, monkeypatch):

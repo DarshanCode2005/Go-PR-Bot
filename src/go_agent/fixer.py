@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
@@ -24,10 +25,14 @@ from go_agent.github_issues import IssueContext
 from go_agent.lint_runner import LintFinding, format_finding
 from go_agent.llm_client import llm_available
 from go_agent.planner import FixPlan
+from go_agent.repo_search import RipgrepNotFoundError, RipgrepError, search_repo
 from go_agent.run_context import RunContext
 from go_agent.utils import normalize_file_path
 
 _GO_FILE = re.compile(r"(?:\./)?([\w./-]+\.go)")
+_FAIL_TEST = re.compile(r"--- FAIL:\s+(\w+)", re.MULTILINE)
+_FAIL_TEST_ALT = re.compile(r"^\s*FAIL:\s+(\w+)", re.MULTILINE)
+_FILE_LINE = re.compile(r"([\w./-]+\.go):(\d+)", re.MULTILINE)
 
 FIXER_SYSTEM_PROMPT = """You are a Go fix agent correcting code after test or lint failures.
 
@@ -41,7 +46,8 @@ Output either:
 2) OR a unified diff for the target file only.
 
 Rules:
-- Edit ONLY the file named in the user message
+- Edit ONLY the target file named in the user message (one file per response)
+- You may receive multiple files across separate fix waves; do not edit files not listed in "Allowed files for this fix iteration"
 - Fix the reported errors without unrelated refactors
 - SEARCH text must match the file exactly (copy indentation character-for-character)
 - Do NOT wrap output in markdown code fences (no ``` lines)"""
@@ -69,6 +75,96 @@ class FixMeta(BaseModel):
     error_summary: str
     files: list[str] = Field(default_factory=list)
     review_round: int | None = None
+
+
+class PlanExpansion(BaseModel):
+    iteration: int
+    original_files: list[str]
+    added_files: list[str]
+    failing_tests: list[str] = Field(default_factory=list)
+    reason: str
+
+
+@dataclass(frozen=True)
+class FixScopeExpansion:
+    target_files: list[str]
+    added_files: list[str]
+    failing_tests: list[str]
+    reason: str
+
+
+@dataclass(frozen=True)
+class CorrectivePatchResult:
+    artifact: CoderArtifact
+    expansion: FixScopeExpansion
+
+
+def parse_failing_tests(test_output: str) -> list[str]:
+    """Extract failing test function names from go test output."""
+    names: list[str] = []
+    seen: set[str] = set()
+    for pattern in (_FAIL_TEST, _FAIL_TEST_ALT):
+        for match in pattern.finditer(test_output):
+            name = match.group(1)
+            if name not in seen:
+                seen.add(name)
+                names.append(name)
+    return names
+
+
+def parse_referenced_go_files(output: str) -> list[str]:
+    """Extract Go file paths from test/lint output (paths and file:line references)."""
+    paths: list[str] = []
+    seen: set[str] = set()
+    for match in _GO_FILE.finditer(output):
+        norm = normalize_file_path(match.group(1))
+        if norm not in seen:
+            seen.add(norm)
+            paths.append(norm)
+    for match in _FILE_LINE.finditer(output):
+        norm = normalize_file_path(match.group(1))
+        if norm not in seen:
+            seen.add(norm)
+            paths.append(norm)
+    return paths
+
+
+def resolve_test_files(
+    repo_path: Path,
+    test_names: list[str],
+    settings: Settings,
+    *,
+    logger: logging.Logger | None = None,
+) -> list[str]:
+    """Map test names to *_test.go files via ripgrep for func TestName definitions."""
+    log = logger or logging.getLogger("go_agent")
+    resolved: list[str] = []
+    seen: set[str] = set()
+    for test_name in test_names:
+        query = f"func {test_name}"
+        try:
+            response = search_repo(
+                repo_path,
+                query,
+                settings,
+                glob="*_test.go",
+                max_results=5,
+            )
+        except RipgrepNotFoundError:
+            log.warning("ripgrep not available; cannot resolve test file for %s", test_name)
+            return resolved
+        except RipgrepError as exc:
+            log.warning("ripgrep failed resolving %s: %s", test_name, exc)
+            continue
+        for hit in response.hits:
+            norm = normalize_file_path(hit.path)
+            if norm in seen:
+                continue
+            if not (repo_path / norm).is_file():
+                continue
+            seen.add(norm)
+            resolved.append(norm)
+    return resolved
 
 
 def build_failure_context(
@@ -110,11 +206,19 @@ def build_review_fix_context(
     )
 
 
-def _failure_summary(fix_context: FixContext) -> str:
+def _failure_summary(
+    fix_context: FixContext,
+    *,
+    scope: FixScopeExpansion | None = None,
+) -> str:
     parts: list[str] = [
         f"Failure source: {fix_context.failure_source}",
         f"Fix iteration: {fix_context.iteration}/{fix_context.max_iterations}",
     ]
+    if scope is not None:
+        parts.append(f"Allowed files for this fix iteration: {', '.join(scope.target_files)}")
+        if scope.failing_tests:
+            parts.append(f"Failing tests: {', '.join(scope.failing_tests)}")
     if fix_context.failure_source == "review":
         parts.append(f"Review round: {fix_context.review_round}")
         if fix_context.review_comments:
@@ -140,8 +244,8 @@ def _collect_mentioned_files(fix_context: FixContext) -> set[str]:
         if raw:
             mentioned.add(normalize_file_path(str(raw)))
     combined = fix_context.test_output + "\n" + fix_context.lint_output
-    for match in _GO_FILE.finditer(combined):
-        mentioned.add(normalize_file_path(match.group(1)))
+    for path in parse_referenced_go_files(combined):
+        mentioned.add(path)
     return mentioned
 
 
@@ -162,20 +266,29 @@ def expand_fix_files(
     plan: FixPlan,
     fix_context: FixContext,
     repo_path: Path,
+    settings: Settings,
     *,
     max_extra: int = 2,
-) -> list[str]:
+    logger: logging.Logger | None = None,
+) -> FixScopeExpansion:
     """Expand fix scope with files mentioned in failures that exist on disk."""
+    log = logger or logging.getLogger("go_agent")
     ordered = _prioritize_plan_files(plan, fix_context)
     mentioned = _collect_mentioned_files(fix_context)
     plan_normalized = {normalize_file_path(path) for path in plan.files}
 
-    fail_mentioned: list[str] = []
-    for line in fix_context.test_output.splitlines():
-        upper = line.upper()
-        if "FAIL:" in upper or upper.strip().startswith("--- FAIL"):
-            for match in _GO_FILE.finditer(line):
-                fail_mentioned.append(normalize_file_path(match.group(1)))
+    failing_tests: list[str] = []
+    if fix_context.failure_source == "test":
+        failing_tests = parse_failing_tests(fix_context.test_output)
+
+    resolved_test_files: list[str] = []
+    if failing_tests:
+        resolved_test_files = resolve_test_files(
+            repo_path,
+            failing_tests,
+            settings,
+            logger=log,
+        )
 
     extra_candidates: list[str] = []
     seen_extra: set[str] = set()
@@ -189,8 +302,13 @@ def expand_fix_files(
         seen_extra.add(norm)
         extra_candidates.append(norm)
 
-    for path in fail_mentioned:
+    for path in resolved_test_files:
         consider(path)
+    for line in fix_context.test_output.splitlines():
+        upper = line.upper()
+        if "FAIL:" in upper or upper.strip().startswith("--- FAIL"):
+            for match in _GO_FILE.finditer(line):
+                consider(match.group(1))
     for path in sorted(mentioned):
         if path.endswith("_test.go"):
             consider(path)
@@ -203,7 +321,27 @@ def expand_fix_files(
         if len(result) >= cap:
             break
         result.append(path)
-    return result
+
+    added = [path for path in result if normalize_file_path(path) not in plan_normalized]
+    reason_parts: list[str] = []
+    if failing_tests:
+        reason_parts.append(
+            f"Failing tests: {', '.join(failing_tests)}"
+        )
+    if resolved_test_files:
+        reason_parts.append(
+            f"Resolved test files: {', '.join(resolved_test_files)}"
+        )
+    if added:
+        reason_parts.append(f"Added files: {', '.join(added)}")
+    reason = "; ".join(reason_parts) if reason_parts else "No scope expansion"
+
+    return FixScopeExpansion(
+        target_files=result,
+        added_files=added,
+        failing_tests=failing_tests,
+        reason=reason,
+    )
 
 
 def build_corrective_patch(
@@ -214,21 +352,23 @@ def build_corrective_patch(
     fix_context: FixContext,
     settings: Settings,
     logger: logging.Logger | None = None,
-) -> CoderArtifact:
+) -> CorrectivePatchResult:
     """Generate corrective patches for planned files using validation failure context."""
     log = logger or logging.getLogger("go_agent")
     if not llm_available(settings):
         raise FixError("LLM API key required for fix agent")
 
-    failure_text = _failure_summary(fix_context)
-    target_files = expand_fix_files(plan, fix_context, repo_path)
-    added = [path for path in target_files if path not in plan.files]
-    if added:
-        log.info("fix scope expanded: %s", ", ".join(f"+{path}" for path in added))
-    if not target_files:
+    expansion = expand_fix_files(plan, fix_context, repo_path, settings, logger=log)
+    if expansion.added_files:
+        log.info(
+            "fix scope expanded: %s",
+            ", ".join(f"+{path}" for path in expansion.added_files),
+        )
+    if not expansion.target_files:
         raise FixError("plan.files is empty; nothing to fix")
 
-    narrowed_plan = plan.model_copy(update={"files": target_files})
+    failure_text = _failure_summary(fix_context, scope=expansion)
+    narrowed_plan = plan.model_copy(update={"files": expansion.target_files})
     waves = schedule_coder_waves(narrowed_plan)
     completed: dict[str, FilePatch] = {}
 
@@ -275,18 +415,19 @@ def build_corrective_patch(
                     raise
                 raise FixError(str(exc)) from exc
 
-    file_patches = [completed[path] for path in target_files if path in completed]
+    file_patches = [completed[path] for path in expansion.target_files if path in completed]
     combined = combine_file_patches(file_patches)
     if not combined.strip():
         raise FixError("fix agent produced empty patch")
 
-    return CoderArtifact(
+    artifact = CoderArtifact(
         issue_number=issue.number,
         repo=issue.repo,
         files=file_patches,
         combined_patch=combined,
         execution_waves=waves,
     )
+    return CorrectivePatchResult(artifact=artifact, expansion=expansion)
 
 
 def _generate_fix_file_patch(
@@ -375,13 +516,27 @@ def write_fix_meta(ctx: RunContext, meta: FixMeta) -> Path:
     return path
 
 
+def write_plan_expansion(ctx: RunContext, record: PlanExpansion) -> Path:
+    """Write plan_expansion.json when fix scope grows beyond the original plan."""
+    path = ctx.artifact_dir / "plan_expansion.json"
+    path.write_text(record.model_dump_json(indent=2) + "\n", encoding="utf-8")
+    return path
+
+
 __all__ = [
+    "CorrectivePatchResult",
     "FixContext",
     "FixError",
     "FixMeta",
+    "FixScopeExpansion",
+    "PlanExpansion",
     "build_corrective_patch",
     "build_failure_context",
     "build_review_fix_context",
     "expand_fix_files",
+    "parse_failing_tests",
+    "parse_referenced_go_files",
+    "resolve_test_files",
     "write_fix_meta",
+    "write_plan_expansion",
 ]

@@ -99,19 +99,27 @@ def mock_run_lints(*args, **kwargs):
 
 def mock_build_corrective_patch(*args, **kwargs):
     from go_agent.coder import CoderArtifact, FilePatch
+    from go_agent.fixer import CorrectivePatchResult, FixScopeExpansion
 
     patch = FilePatch(
         path="README.md",
         format="search_replace",
         patch="--- a/README.md\n+++ b/README.md\n",
     )
-    return CoderArtifact(
+    artifact = CoderArtifact(
         issue_number=1,
         repo="gin-gonic/gin",
         files=[patch],
         combined_patch=patch.patch,
         execution_waves=[["README.md"]],
     )
+    expansion = FixScopeExpansion(
+        target_files=["README.md"],
+        added_files=[],
+        failing_tests=[],
+        reason="No scope expansion",
+    )
+    return CorrectivePatchResult(artifact=artifact, expansion=expansion)
 
 
 def run_git(args: list[str], *, cwd: Path) -> None:
