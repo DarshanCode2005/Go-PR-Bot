@@ -62,6 +62,27 @@ def test_run_log_written(tmp_path, monkeypatch):
     assert ctx.run_id in content
 
 
+def test_bare_logger_includes_run_id(tmp_path, monkeypatch):
+    """Modules that call getLogger('go_agent') directly must not raise KeyError."""
+    monkeypatch.chdir(tmp_path)
+    settings = Settings(
+        artifacts_dir=tmp_path / "artifacts",
+        work_dir=tmp_path / "workspaces",
+    )
+    ctx = create_run_context(settings)
+    configure_run_logging(ctx)
+
+    bare_logger = logging.getLogger("go_agent")
+    bare_logger.info("bare logger message")
+
+    for handler in bare_logger.handlers:
+        handler.flush()
+
+    content = ctx.log_path.read_text(encoding="utf-8")
+    assert "bare logger message" in content
+    assert ctx.run_id in content
+
+
 def test_cli_run_creates_artifact_dir(tmp_path, monkeypatch, bare_repo_url: str):
     monkeypatch.chdir(tmp_path)
     artifacts = tmp_path / "artifacts"
