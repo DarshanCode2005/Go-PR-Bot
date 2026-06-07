@@ -280,7 +280,7 @@ def _validate_review(payload: dict[str, Any]) -> ReviewResult:
 
 
 def _request_review(messages: list[dict[str, str]], settings: Settings) -> ReviewResult:
-    content = complete(messages, tier="strong", settings=settings)
+    content = complete(messages, tier="strong", settings=settings, stage="review")
     if not content:
         raise ReviewError("LLM completion failed")
     payload = _parse_review_json(content)

@@ -412,7 +412,7 @@ def _generate_fix_file_patch(
     from go_agent.coder import normalize_llm_patch
 
     try:
-        content = complete(messages, tier="fast", settings=settings)
+        content = complete(messages, tier="fast", settings=settings, stage="fix")
         if not content:
             raise FixError(f"LLM completion failed for {file_path}")
         patch = normalize_llm_patch(file_path, file_content, content, plan)
@@ -430,7 +430,7 @@ def _generate_fix_file_patch(
                 ),
             }
         )
-        content = complete(retry_messages, tier="fast", settings=settings)
+        content = complete(retry_messages, tier="fast", settings=settings, stage="fix")
         if not content:
             raise FixError(f"Fix failed after retry for {file_path}") from first_error
         try:

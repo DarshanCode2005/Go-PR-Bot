@@ -145,6 +145,7 @@ def _summarize_file(path: str, content: str, settings: Settings) -> str | None:
         tier="fast",
         settings=settings,
         temperature=0,
+        stage="context",
     )
     return (summary or "").strip() or None
 

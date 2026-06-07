@@ -65,7 +65,11 @@ flowchart LR
   pr2 --> doctor
 ```
 
-## Closed-loop graph
+## LangGraph orchestrator (code)
+
+The orchestrator wires the implementation loop through LangGraph nodes. LLM calls in the
+scope, context, plan, code, integrate, fix, review, and pr stages are tracked in
+`usage.json` under the run artifact directory.
 
 ```mermaid
 flowchart TB

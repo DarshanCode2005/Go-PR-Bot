@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import json
 from collections.abc import Callable
 from typing import Any
 from unittest.mock import patch
@@ -10,7 +11,27 @@ from unittest.mock import patch
 import pytest
 
 from go_agent.config import Settings, clear_settings_cache
+from go_agent.cost_tracker import cost_tracking
 from go_agent.llm_client import complete, get_completion_transport, llm_available, set_completion_transport
+
+
+class _Message:
+    content = "tracked ok"
+
+
+class _Choice:
+    message = _Message()
+
+
+class UsageResponse:
+    choices = [_Choice()]
+
+    def __init__(self) -> None:
+        self.usage = {
+            "prompt_tokens": 11,
+            "completion_tokens": 7,
+            "total_tokens": 18,
+        }
 
 
 class RecordingTransport:
@@ -172,3 +193,25 @@ def test_set_completion_transport_injects_mock():
     transport = RecordingTransport(["ok"])
     set_completion_transport(transport)
     assert get_completion_transport() is transport
+
+
+def test_complete_records_usage_when_tracker_active(monkeypatch, tmp_path):
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    settings = Settings()
+    transport = RecordingTransport([UsageResponse()])
+    set_completion_transport(transport)
+
+    with cost_tracking(tmp_path):
+        out = complete(
+            [{"role": "user", "content": "hello"}],
+            tier="fast",
+            settings=settings,
+            stage="plan",
+        )
+
+    assert out == "tracked ok"
+    payload = json.loads((tmp_path / "usage.json").read_text(encoding="utf-8"))
+    assert payload["totals"]["input_tokens"] == 11
+    assert payload["totals"]["output_tokens"] == 7
+    assert payload["stages"][0]["stage"] == "plan"
+    assert payload["stages"][0]["model"] == settings.model_fast

@@ -11,6 +11,7 @@ import typer
 
 from go_agent.config import Settings, get_settings
 from go_agent.constants import APPROVED_REPOS_HELP
+from go_agent.cost_tracker import cost_tracking
 from go_agent.logging_config import configure_run_logging
 from go_agent.run_context import RunContext, create_run_context
 from go_agent.branching import BranchError, BranchInfo, create_issue_branch, write_branch_meta
@@ -395,44 +396,45 @@ def run(
     )
 
     try:
-        issue_ctx = fetch_issue_context(repo, issue, settings)
-        ensure_issue_open_or_forced(issue_ctx, force=force, logger=logger)
-        write_issue_context(ctx, issue_ctx)
-        logger.info(
-            "Issue #%s state=%s labels=%s comments=%d",
-            issue_ctx.number,
-            issue_ctx.state,
-            issue_ctx.labels,
-            len(issue_ctx.comments),
-        )
-        scope_bundle, search_hits = build_scope_with_search(
-            issue_ctx,
-            repo_path,
-            settings,
-            logger=logger,
-        )
-        rag_query = build_rag_query(issue_ctx)
-        rag_hits = retrieve_rag_hits(
-            repo_path,
-            issue_ctx,
-            repo,
-            settings,
-            logger=logger,
-        )
-        if settings.enable_rag:
-            write_rag_hits(ctx, issue_ctx, rag_query, rag_hits)
-            search_hits = merge_search_hits(
-                search_hits,
-                rag_hits_to_search_hits(rag_hits),
+        with cost_tracking(ctx.artifact_dir):
+            issue_ctx = fetch_issue_context(repo, issue, settings)
+            ensure_issue_open_or_forced(issue_ctx, force=force, logger=logger)
+            write_issue_context(ctx, issue_ctx)
+            logger.info(
+                "Issue #%s state=%s labels=%s comments=%d",
+                issue_ctx.number,
+                issue_ctx.state,
+                issue_ctx.labels,
+                len(issue_ctx.comments),
             )
-            logger.info("RAG search: %d hits merged", len(rag_hits))
-        code_graph, context_bundle = build_context_bundle(
-            repo_path,
-            issue_ctx,
-            scope_bundle,
-            search_hits,
-            settings,
-        )
+            scope_bundle, search_hits = build_scope_with_search(
+                issue_ctx,
+                repo_path,
+                settings,
+                logger=logger,
+            )
+            rag_query = build_rag_query(issue_ctx)
+            rag_hits = retrieve_rag_hits(
+                repo_path,
+                issue_ctx,
+                repo,
+                settings,
+                logger=logger,
+            )
+            if settings.enable_rag:
+                write_rag_hits(ctx, issue_ctx, rag_query, rag_hits)
+                search_hits = merge_search_hits(
+                    search_hits,
+                    rag_hits_to_search_hits(rag_hits),
+                )
+                logger.info("RAG search: %d hits merged", len(rag_hits))
+            code_graph, context_bundle = build_context_bundle(
+                repo_path,
+                issue_ctx,
+                scope_bundle,
+                search_hits,
+                settings,
+            )
         write_scope_hints(ctx, scope_bundle)
         write_search_hits(ctx, scope_bundle, search_hits)
         write_code_graph(ctx, code_graph)
@@ -503,7 +505,8 @@ def run(
                 context_bundle,
                 branch,
             )
-            final_state = _invoke_graph(compiled, initial_state, ctx.run_id)
+            with cost_tracking(ctx.artifact_dir):
+                final_state = _invoke_graph(compiled, initial_state, ctx.run_id)
             logger.info(
                 "Validation graph complete last_node=%s status=%s iteration=%d "
                 "test_passed=%s lint_passed=%s",
@@ -517,20 +520,21 @@ def run(
             _handle_graph_exception(exc, logger)
 
     try:
-        _finish_run(
-            ctx=ctx,
-            logger=logger,
-            settings=settings,
-            issue_ctx=issue_ctx,
-            scope_bundle=scope_bundle,
-            branch=branch,
-            repo=repo,
-            repo_path=repo_path,
-            final_state=final_state,
-            patch_file=patch_file,
-            dry_run=dry_run,
-            create_pr=create_pr,
-        )
+        with cost_tracking(ctx.artifact_dir):
+            _finish_run(
+                ctx=ctx,
+                logger=logger,
+                settings=settings,
+                issue_ctx=issue_ctx,
+                scope_bundle=scope_bundle,
+                branch=branch,
+                repo=repo,
+                repo_path=repo_path,
+                final_state=final_state,
+                patch_file=patch_file,
+                dry_run=dry_run,
+                create_pr=create_pr,
+            )
     except PatchApplyError as exc:
         logger.error("Patch apply failed: %s", exc)
         raise typer.Exit(code=1) from exc
@@ -623,7 +627,8 @@ def resume(
         )
         logger.info("Resuming run %s from start (no checkpoint yet)", run_id)
     try:
-        final_state = _invoke_graph(compiled, invoke_state, run_id)
+        with cost_tracking(ctx.artifact_dir):
+            final_state = _invoke_graph(compiled, invoke_state, run_id)
         logger.info(
             "Resume complete last_node=%s status=%s iteration=%d",
             final_state.get("last_node"),
@@ -633,20 +638,21 @@ def resume(
     except Exception as exc:
         _handle_graph_exception(exc, logger)
 
-    _finish_run(
-        ctx=ctx,
-        logger=logger,
-        settings=settings,
-        issue_ctx=issue_ctx,
-        scope_bundle=scope_bundle,
-        branch=branch,
-        repo=meta.repo,
-        repo_path=repo_path,
-        final_state=final_state,
-        patch_file=None,
-        dry_run=effective_dry_run,
-        create_pr=effective_create_pr,
-    )
+    with cost_tracking(ctx.artifact_dir):
+        _finish_run(
+            ctx=ctx,
+            logger=logger,
+            settings=settings,
+            issue_ctx=issue_ctx,
+            scope_bundle=scope_bundle,
+            branch=branch,
+            repo=meta.repo,
+            repo_path=repo_path,
+            final_state=final_state,
+            patch_file=None,
+            dry_run=effective_dry_run,
+            create_pr=effective_create_pr,
+        )
 
 
 def main() -> None:

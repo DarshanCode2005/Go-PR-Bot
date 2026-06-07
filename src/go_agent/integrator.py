@@ -124,7 +124,7 @@ def merge_patches_with_llm(
 
     for attempt in range(max_attempts):
         try:
-            content = complete(messages, tier="fast", settings=settings)
+            content = complete(messages, tier="fast", settings=settings, stage="integrate")
             if not content:
                 raise IntegratorError("LLM merge completion failed")
             merged = normalize_llm_patch(path, base_content, content, plan)

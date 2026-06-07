@@ -11,6 +11,7 @@ from go_agent.context_refresh import (
 )
 from go_agent.coder import build_proposed_patch, write_coder_artifact
 from go_agent.config import get_settings
+from go_agent.cost_tracker import cost_tracking
 from go_agent.fixer import (
     PlanExpansion,
     build_corrective_patch,
@@ -49,14 +50,15 @@ def plan_node(state: AgentState) -> AgentState:
     bundle = bundle_from_state(state)
     scope_hints = state.get("scope_hints") or []
 
-    fix_plan = build_fix_plan(
-        issue,
-        bundle,
-        scope_hints,
-        settings,
-        logger=logger,
-        repo_path=repo_path_from_state(state),
-    )
+    with cost_tracking(ctx.artifact_dir):
+        fix_plan = build_fix_plan(
+            issue,
+            bundle,
+            scope_hints,
+            settings,
+            logger=logger,
+            repo_path=repo_path_from_state(state),
+        )
     write_plan(ctx, fix_plan)
     logger.info(
         "Fix plan: %d files, %d steps, %d test commands",
@@ -88,14 +90,15 @@ def code_node(state: AgentState) -> AgentState:
             "last_node": "code",
         }
 
-    artifact = build_proposed_patch(
-        repo_path,
-        issue,
-        plan,
-        bundle,
-        settings,
-        logger=logger,
-    )
+    with cost_tracking(ctx.artifact_dir):
+        artifact = build_proposed_patch(
+            repo_path,
+            issue,
+            plan,
+            bundle,
+            settings,
+            logger=logger,
+        )
     write_coder_artifact(ctx, artifact)
     return {
         "status": "coding",
@@ -115,14 +118,15 @@ def integrate_node(state: AgentState) -> AgentState:
     iteration = state.get("iteration", 0)
     artifact = coder_artifact_from_state(state)
 
-    result = integrate_file_patches(
-        repo_path,
-        artifact.files,
-        plan,
-        integration_base,
-        settings,
-        logger=logger,
-    )
+    with cost_tracking(ctx.artifact_dir):
+        result = integrate_file_patches(
+            repo_path,
+            artifact.files,
+            plan,
+            integration_base,
+            settings,
+            logger=logger,
+        )
     write_integrator_artifact(ctx, result)
     patch_result = apply_patch_and_commit(
         repo_path,
@@ -300,15 +304,16 @@ def fix_node(state: AgentState) -> AgentState:
             refresh_record.total_chars_after,
         )
 
-    patch_result = build_corrective_patch(
-        repo_path,
-        issue,
-        plan,
-        bundle,
-        fix_context,
-        settings,
-        logger=logger,
-    )
+    with cost_tracking(ctx.artifact_dir):
+        patch_result = build_corrective_patch(
+            repo_path,
+            issue,
+            plan,
+            bundle,
+            fix_context,
+            settings,
+            logger=logger,
+        )
     artifact = patch_result.artifact
     expansion = patch_result.expansion
     write_coder_artifact(ctx, artifact)
@@ -395,16 +400,17 @@ def review_node(state: AgentState) -> AgentState:
             if patch_file.is_file():
                 patch_text = patch_file.read_text(encoding="utf-8")
         try:
-            review = build_review(
-                issue,
-                plan,
-                repo_path=repo_path,
-                patch_text=patch_text,
-                test_result=test_result,
-                lint_result=lint_result,
-                settings=settings,
-                logger=logger,
-            )
+            with cost_tracking(run_context_from_state(state).artifact_dir):
+                review = build_review(
+                    issue,
+                    plan,
+                    repo_path=repo_path,
+                    patch_text=patch_text,
+                    test_result=test_result,
+                    lint_result=lint_result,
+                    settings=settings,
+                    logger=logger,
+                )
         except ReviewError as exc:
             logger.error("Reviewer failed: %s", exc)
             raise

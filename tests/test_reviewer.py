@@ -63,7 +63,16 @@ class RecordingTransport:
 
 
 @pytest.fixture(autouse=True)
-def _reset_state():
+def _reset_state(monkeypatch):
+    for name in (
+        "OPENAI_API_KEY",
+        "ANTHROPIC_API_KEY",
+        "GROQ_API_KEY",
+        "XAI_API_KEY",
+        "GEMINI_API_KEY",
+        "GOOGLE_API_KEY",
+    ):
+        monkeypatch.delenv(name, raising=False)
     clear_settings_cache()
     set_completion_transport(None)
     yield

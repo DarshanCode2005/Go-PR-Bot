@@ -299,7 +299,7 @@ def _request_plan(
     context_bundle: ContextBundle | None = None,
     repo_path: Path | None = None,
 ) -> FixPlan:
-    content = complete(messages, tier="strong", settings=settings)
+    content = complete(messages, tier="strong", settings=settings, stage="plan")
     if not content:
         raise PlanError("LLM completion failed")
     payload = _parse_plan_json(content)

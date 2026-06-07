@@ -636,7 +636,7 @@ def generate_file_patch(
     )
 
     try:
-        content = complete(messages, tier="fast", settings=settings)
+        content = complete(messages, tier="fast", settings=settings, stage="code")
         if not content:
             raise CoderError("LLM completion failed")
         file_patch = normalize_llm_patch(normalized_path, original, content, plan)
@@ -656,7 +656,7 @@ def generate_file_patch(
             dependency_context=dependency_context,
             file_excerpt=file_excerpt,
         )
-        content = complete(retry_messages, tier="fast", settings=settings)
+        content = complete(retry_messages, tier="fast", settings=settings, stage="code")
         if not content:
             raise CoderError(f"Coder failed after retry for {normalized_path}") from first_error
         try:

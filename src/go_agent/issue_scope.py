@@ -112,6 +112,7 @@ def enrich_scope_hints_llm(
             tier="fast",
             settings=settings,
             temperature=0,
+            stage="scope",
         )
         if not content:
             return hints

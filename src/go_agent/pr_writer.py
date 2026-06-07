@@ -141,6 +141,7 @@ def enrich_pr_llm(
             tier="fast",
             settings=settings,
             temperature=0,
+            stage="pr",
         )
         if not content:
             return draft
