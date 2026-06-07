@@ -1,5 +1,7 @@
 # Architecture: Agentic Go OSS Contributor
 
+Operator setup (install, env vars, usage): see [README](../README.md).
+
 ## Goals (from assignment)
 
 1. Ingest a GitHub issue from an approved repo

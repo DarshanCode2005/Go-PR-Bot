@@ -38,6 +38,7 @@ Step-by-step record of what was built for each backlog item in [Go-PR-Bot](https
 | #28 Review fix loop | [#29](https://github.com/DarshanCode2005/Go-PR-Bot/issues/29) | Done |
 | #29 Skill loader + agent injection | [#30](https://github.com/DarshanCode2005/Go-PR-Bot/issues/30) | Done |
 | #31 Skill: go-playground/validator | [#32](https://github.com/DarshanCode2005/Go-PR-Bot/issues/32) | Done |
+| #40 README submission polish | [#39](https://github.com/DarshanCode2005/Go-PR-Bot/issues/39) | Done |
 
 ---
 
@@ -1811,6 +1812,49 @@ pytest -q && ruff check src tests
 
 ---
 
+### Backlog #40 — README submission polish
+
+**GitHub:** [#39](https://github.com/DarshanCode2005/Go-PR-Bot/issues/39)  
+**Commit:** (pending) `docs: README submission polish with setup and architecture (fixes #39)`  
+**PR:** (pending)
+
+#### What was built
+
+**[`README.md`](README.md)**
+
+- Evaluator-facing operator guide: prerequisites, setup, usage, resume
+- Approved repos table with skill paths and branch/module notes
+- Grouped environment variable tables synced with `config.py` and `.env.example`
+- Mermaid diagrams for end-to-end flow and LLM tier usage
+- Limitations, cost/token guidance, development commands
+- Links to `docs/ARCHITECTURE.md` and this file
+- Actual `src/go_agent/` layout (removed stale target tree)
+- Prose avoids em dashes; complete sentences in limitations and cost sections
+
+**[`IMPLEMENTATION_CONTEXT.md`](IMPLEMENTATION_CONTEXT.md)**
+
+- Status table row for Backlog #40
+- Expanded environment variables appendix (full `Settings` field list)
+
+**[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)**
+
+- Cross-link to README for operator setup
+
+#### Key decisions
+
+- README is the primary submission entry point; ARCHITECTURE remains the deep design doc
+- MCP described only as future/optional (Backlog #35 not shipped)
+- Cost section is qualitative (no token metering in code)
+
+#### Verification
+
+```bash
+pytest tests/test_orchestrator.py::test_architecture_lists_graph_nodes -q
+pytest -q && ruff check src tests
+```
+
+---
+
 ## Template for future issues
 
 Copy this block when appending the next implemented issue.
@@ -1886,23 +1930,69 @@ pytest -q && ruff check src tests
 
 ## Environment variables
 
-See `.env.example` and `config.py`. Minimum for current pipeline:
+See [`.env.example`](.env.example), [`config.py`](src/go_agent/config.py), and the grouped tables in [README.md](README.md). Summary by category:
 
-| Variable | Required | Purpose |
-|----------|----------|---------|
-| `GITHUB_TOKEN` or `gh auth` | For real issue fetch | Issue metadata |
-| `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` | Optional | LLM scope + PR draft enrichment |
-| `GO_AGENT_LOG_LEVEL` | Optional | DEBUG/INFO/WARNING/ERROR |
-| `GO_AGENT_CONTEXT_MAX_CHARS` | Optional | Context bundle char budget (default 80000) |
-| `GO_AGENT_CONTEXT_MAX_FILES` | Optional | Max ranked files in bundle (default 15) |
-| `GO_AGENT_ENABLE_RAG` | Optional | Enable semantic retrieval (default false) |
-| `GO_AGENT_RAG_EMBED_PROVIDER` | Optional | `local` or `openai` (default local) |
-| `GO_AGENT_LLM_MAX_RETRIES` | Optional | Rate-limit retry attempts for LLM completion |
-| `GO_AGENT_LLM_RETRY_BASE_DELAY` | Optional | Base delay seconds for LLM retry backoff |
-| `GO_AGENT_TEST_TIMEOUT` | Optional | Subprocess test command timeout seconds (default 300) |
-| `GO_AGENT_LINT_TIMEOUT` | Optional | Subprocess lint command timeout seconds (default 120) |
-| `GO_AGENT_MAX_REVIEW_ROUNDS` | Optional | Review `request_changes` fix cycles before failed (default 1) |
+### LLM and GitHub
+
+| Setting | Env var | Default |
+|---------|---------|---------|
+| `openai_api_key` | `OPENAI_API_KEY` | None |
+| `anthropic_api_key` | `ANTHROPIC_API_KEY` | None |
+| `model_fast` | `GO_AGENT_MODEL_FAST` | `gpt-4o-mini` |
+| `model_strong` | `GO_AGENT_MODEL_STRONG` | `gpt-4o` |
+| `llm_max_retries` | `GO_AGENT_LLM_MAX_RETRIES` | `3` |
+| `llm_retry_base_delay` | `GO_AGENT_LLM_RETRY_BASE_DELAY` | `1.0` |
+| `github_token` | `GITHUB_TOKEN` | None |
+
+### Paths, logging, pipeline caps
+
+| Setting | Env var | Default |
+|---------|---------|---------|
+| `work_dir` | `GO_AGENT_WORK_DIR` | `./workspaces` |
+| `artifacts_dir` | `GO_AGENT_ARTIFACTS_DIR` | `./artifacts` |
+| `log_level` | `GO_AGENT_LOG_LEVEL` | `INFO` |
+| `max_fix_iterations` | `GO_AGENT_MAX_FIX_ITERATIONS` | `5` |
+| `max_review_rounds` | `GO_AGENT_MAX_REVIEW_ROUNDS` | `1` |
+| `max_issue_comments` | `GO_AGENT_MAX_ISSUE_COMMENTS` | `20` |
+| `test_timeout` | `GO_AGENT_TEST_TIMEOUT` | `300` |
+| `lint_timeout` | `GO_AGENT_LINT_TIMEOUT` | `120` |
+
+### Context bundle
+
+| Setting | Env var | Default |
+|---------|---------|---------|
+| `context_max_chars` | `GO_AGENT_CONTEXT_MAX_CHARS` | `80000` |
+| `context_max_files` | `GO_AGENT_CONTEXT_MAX_FILES` | `15` |
+| `context_graph_max_hops` | `GO_AGENT_CONTEXT_GRAPH_MAX_HOPS` | `2` |
+| `context_snippet_radius` | `GO_AGENT_CONTEXT_SNIPPET_RADIUS` | `5` |
+| `context_full_file_top_k` | `GO_AGENT_CONTEXT_FULL_FILE_TOP_K` | `3` |
+| `context_summary_top_k` | `GO_AGENT_CONTEXT_SUMMARY_TOP_K` | `5` |
+
+### Coder, integrator, repo map, search
+
+| Setting | Env var | Default |
+|---------|---------|---------|
+| `coder_max_file_chars` | `GO_AGENT_CODER_MAX_FILE_CHARS` | `60000` |
+| `coder_max_workers` | `GO_AGENT_CODER_MAX_WORKERS` | `4` |
+| `integrator_max_merge_retries` | `GO_AGENT_INTEGRATOR_MAX_MERGE_RETRIES` | `1` |
+| `repo_map_max_depth` | `GO_AGENT_REPO_MAP_MAX_DEPTH` | `4` |
+| `repo_map_skip_vendor` | `GO_AGENT_REPO_MAP_SKIP_VENDOR` | `true` |
+| `ripgrep_timeout` | `GO_AGENT_RIPGREP_TIMEOUT` | `30` |
+| `ripgrep_max_results` | `GO_AGENT_RIPGREP_MAX_RESULTS` | `50` |
+| `ripgrep_default_glob` | `GO_AGENT_RIPGREP_DEFAULT_GLOB` | `*.go` |
+
+### Optional RAG
+
+| Setting | Env var | Default |
+|---------|---------|---------|
+| `enable_rag` | `GO_AGENT_ENABLE_RAG` | `false` |
+| `rag_top_k` | `GO_AGENT_RAG_TOP_K` | `10` |
+| `rag_chunk_lines` | `GO_AGENT_RAG_CHUNK_LINES` | `80` |
+| `rag_chunk_overlap` | `GO_AGENT_RAG_CHUNK_OVERLAP` | `20` |
+| `rag_embed_provider` | `GO_AGENT_RAG_EMBED_PROVIDER` | `local` |
+| `rag_embed_model` | `GO_AGENT_RAG_EMBED_MODEL` | `all-MiniLM-L6-v2` |
+| `rag_min_score` | `GO_AGENT_RAG_MIN_SCORE` | `0.3` |
 
 ---
 
-*Last updated: after Backlog #29 (GitHub #30) — repo skill loader and LLM injection for planner, coder, reviewer.*
+*Last updated: after Backlog #40 (GitHub #39) — README submission polish.*

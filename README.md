@@ -1,104 +1,241 @@
 # Go OSS Agentic Contributor
 
-An agentic AI platform that takes a GitHub issue from an approved Go OSS project, plans and implements a fix, validates it in a closed loop, reviews the change, and produces a PR (or local branch + PR summary).
+`go-agent` is an agentic pipeline for approved Go open source repositories. Given a GitHub issue, it clones the repo, builds context, plans a fix, generates patches, runs tests and lint in a closed loop, reviews the change, and writes a PR summary (optionally opening a draft PR). Each run stores reproducible artifacts under `artifacts/{run_id}/`.
 
-**Approved targets:** [gin-gonic/gin](https://github.com/gin-gonic/gin), [spf13/cobra](https://github.com/spf13/cobra), [go-playground/validator](https://github.com/go-playground/validator), [golangci/golangci-lint](https://github.com/golangci/golangci-lint)
+For a step-by-step record of what was built, see [IMPLEMENTATION_CONTEXT.md](IMPLEMENTATION_CONTEXT.md).
 
-## Quick start (after implementation)
+## Approved repositories
+
+Only these four targets are allowed. Each has a repo skill under `skills/`; unknown repos fall back to [`skills/_default/SKILL.md`](skills/_default/SKILL.md).
+
+| Repository | Skill file | Notes |
+|------------|------------|-------|
+| [gin-gonic/gin](https://github.com/gin-gonic/gin) | `skills/gin-gonic__gin/SKILL.md` | Default branch `master` |
+| [spf13/cobra](https://github.com/spf13/cobra) | `skills/spf13__cobra/SKILL.md` | Default branch `main` |
+| [go-playground/validator](https://github.com/go-playground/validator) | `skills/go-playground__validator/SKILL.md` | Module path ends in `/v10` |
+| [golangci/golangci-lint](https://github.com/golangci/golangci-lint) | `skills/golangci__golangci-lint/SKILL.md` | Module path ends in `/v2`; large test suite |
+
+## Prerequisites
+
+- **Python 3.11+**
+- **Go toolchain** matching the target repo (several approved repos require Go 1.25+)
+- **`gh` CLI** for issue fetch and optional PR creation (`gh auth login` or `GITHUB_TOKEN`)
+- **`git`** and **`rg`** (ripgrep) on your PATH
+- **Optional:** `golangci-lint` when the repo skill or default lint path runs it
+- **LLM API key:** at least one of `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` (planner, coder, and reviewer require an LLM)
+
+## Setup
 
 ```bash
-# Prerequisites: Python 3.11+, Go 1.22+, gh CLI, OPENAI_API_KEY (or ANTHROPIC_API_KEY)
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 
-# Configure
 cp .env.example .env
-# Edit .env with your LLM provider, GitHub token, and optional GO_AGENT_LOG_LEVEL (DEBUG|INFO|WARNING|ERROR)
+# Edit .env: LLM keys, optional GITHUB_TOKEN, GO_AGENT_LOG_LEVEL
 
-# Run on an issue (dry-run: no PR)
+# Dry run (no push, no PR)
 go-agent run --repo gin-gonic/gin --issue 1234 --dry-run
 
-# Full run with PR
+# Full run with draft PR
 go-agent run --repo spf13/cobra --issue 567 --create-pr
 ```
 
-## Resume interrupted runs
+Optional semantic retrieval: `pip install -e ".[rag]"` then pass `--rag` on `go-agent run`.
 
-Each `go-agent run` persists LangGraph checkpoints to a shared SQLite database and writes `run_meta.json` under the run artifact directory. If a run is interrupted (crash, kill, network error), resume from the last checkpointed node:
+## Configuration
+
+All settings load from environment variables (with optional `.env`). Variables prefixed with `GO_AGENT_` map to fields in [`src/go_agent/config.py`](src/go_agent/config.py). See [`.env.example`](.env.example) for a starter file.
+
+### LLM and GitHub
+
+| Variable | Required | Default | Purpose |
+|----------|----------|---------|---------|
+| `OPENAI_API_KEY` | One LLM key | (none) | OpenAI via LiteLLM |
+| `ANTHROPIC_API_KEY` | One LLM key | (none) | Anthropic via LiteLLM |
+| `GO_AGENT_MODEL_FAST` | No | `gpt-4o-mini` | Coder, fixer, scope hints, PR draft |
+| `GO_AGENT_MODEL_STRONG` | No | `gpt-4o` | Planner and reviewer |
+| `GO_AGENT_LLM_MAX_RETRIES` | No | `3` | Retries on rate limits |
+| `GO_AGENT_LLM_RETRY_BASE_DELAY` | No | `1.0` | Base delay (seconds) for backoff |
+| `GITHUB_TOKEN` | For API fetch | (none) | Alternative to `gh auth login` |
+
+### Pipeline and paths
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `GO_AGENT_WORK_DIR` | `./workspaces` | Cloned repos per run |
+| `GO_AGENT_ARTIFACTS_DIR` | `./artifacts` | Logs, JSON artifacts, checkpoints |
+| `GO_AGENT_LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING`, or `ERROR` |
+| `GO_AGENT_MAX_FIX_ITERATIONS` | `5` | Test/lint fix loop cap |
+| `GO_AGENT_MAX_REVIEW_ROUNDS` | `1` | Review `request_changes` fix cycles |
+| `GO_AGENT_TEST_TIMEOUT` | `300` | Subprocess test timeout (seconds) |
+| `GO_AGENT_LINT_TIMEOUT` | `120` | Subprocess lint timeout (seconds) |
+| `GO_AGENT_MAX_ISSUE_COMMENTS` | `20` | Issue comments loaded for context |
+
+### Context bundle
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `GO_AGENT_CONTEXT_MAX_CHARS` | `80000` | Total char budget for ranked files |
+| `GO_AGENT_CONTEXT_MAX_FILES` | `15` | Max files in the bundle |
+| `GO_AGENT_CONTEXT_GRAPH_MAX_HOPS` | `2` | Code graph expansion depth |
+| `GO_AGENT_CONTEXT_SNIPPET_RADIUS` | `5` | Lines around ripgrep hits |
+| `GO_AGENT_CONTEXT_FULL_FILE_TOP_K` | `3` | Top files loaded in full |
+| `GO_AGENT_CONTEXT_SUMMARY_TOP_K` | `5` | Files summarized by LLM |
+
+### Coder and search
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `GO_AGENT_CODER_MAX_FILE_CHARS` | `60000` | Max file size sent to coder |
+| `GO_AGENT_CODER_MAX_WORKERS` | `4` | Parallel coder workers |
+| `GO_AGENT_INTEGRATOR_MAX_MERGE_RETRIES` | `1` | Integrator LLM retries |
+| `GO_AGENT_RIPGREP_TIMEOUT` | `30` | Ripgrep subprocess timeout |
+| `GO_AGENT_RIPGREP_MAX_RESULTS` | `50` | Max search hits |
+| `GO_AGENT_REPO_MAP_MAX_DEPTH` | `4` | Repo tree walk depth |
+
+### Optional RAG
+
+Enable with `GO_AGENT_ENABLE_RAG=true` and `pip install -e ".[rag]"`.
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `GO_AGENT_RAG_TOP_K` | `10` | Semantic hits merged into search |
+| `GO_AGENT_RAG_CHUNK_LINES` | `80` | Embedding chunk size |
+| `GO_AGENT_RAG_CHUNK_OVERLAP` | `20` | Chunk overlap |
+| `GO_AGENT_RAG_EMBED_PROVIDER` | `local` | `local` or `openai` |
+| `GO_AGENT_RAG_EMBED_MODEL` | `all-MiniLM-L6-v2` | Local embed model name |
+| `GO_AGENT_RAG_MIN_SCORE` | `0.3` | Minimum similarity score |
+
+## Usage
+
+### `go-agent run`
+
+```bash
+go-agent run --repo <owner/name> --issue <N> [options]
+```
+
+| Flag | Description |
+|------|-------------|
+| `--repo` | Approved repository (required) |
+| `--issue` | GitHub issue number (required) |
+| `--dry-run` | Skip push and PR create (default) |
+| `--create-pr` | Push branch and open draft PR via `gh` |
+| `--force` | Run on closed issues |
+| `--rag` | Enable semantic retrieval for context |
+| `--patch-file` | Apply an existing patch instead of LLM coding |
+
+The CLI clones the repo, fetches the issue, builds scope and context, creates branch `agent/issue-{N}-{slug}`, then runs the LangGraph closed loop. Outputs land in `artifacts/{run_id}/` (see [IMPLEMENTATION_CONTEXT.md](IMPLEMENTATION_CONTEXT.md#artifacts-per-run) for the full file list).
+
+Key artifacts: `plan.json`, `proposed.patch`, `test_result.json`, `lint_result.json`, `review.json`, `PR.md`.
+
+### `go-agent resume`
+
+If a run is interrupted, resume from the last LangGraph checkpoint:
 
 ```bash
 go-agent run --repo gin-gonic/gin --issue 1234 --dry-run
-# note run_id from logs ("Resume later with: ...") or artifacts/{run_id}/
+# Note run_id from logs or artifacts/{run_id}/
 
 go-agent resume --run-id <run_id>
 ```
 
-- **Checkpoint DB:** `{GO_AGENT_ARTIFACTS_DIR}/checkpoints/checkpoints.db` (default `artifacts/checkpoints/checkpoints.db`)
-- **Thread ID:** each run uses its UUID as LangGraph `thread_id`
-- **Requirements:** the original workspace clone (`workspaces/{run_id}/repo`) and artifact directory must still exist
-- **Already complete:** `go-agent resume` exits with code 2 if the graph finished successfully
-- **Overrides:** optional `--dry-run` / `--no-dry-run` and `--create-pr` override values stored in `run_meta.json`
+- **Checkpoint DB:** `artifacts/checkpoints/checkpoints.db` (or `{GO_AGENT_ARTIFACTS_DIR}/checkpoints/`)
+- **Thread ID:** the run UUID
+- **Requirements:** `workspaces/{run_id}/repo` and `artifacts/{run_id}/` must still exist
+- **Already complete:** exit code 2 if the graph finished
+- **Overrides:** `--dry-run` / `--create-pr` can override values from `run_meta.json`
 
-## Review output
+### Review output
 
-After test/lint pass, the review agent writes `artifacts/{run_id}/review.json` with a structured `decision` (`approve`, `request_changes`, or `reject`), actionable `comments[]`, and a checklist covering issue acceptance criteria, tests, API breaks, style, and error messages. The reviewer receives `gofmt -d` output and vet findings as context and cites concrete file/line issues when present. On `request_changes`, the graph runs one fix/re-test cycle by default (`GO_AGENT_MAX_REVIEW_ROUNDS=1`); a second failure escalates to `status=failed` with the review attached.
+After tests and lint pass, the review agent writes `review.json` with `decision` (`approve`, `request_changes`, or `reject`), `comments[]`, and a checklist. The reviewer sees `gofmt -d` and vet findings. On `request_changes`, the graph runs one fix cycle by default (`GO_AGENT_MAX_REVIEW_ROUNDS=1`); a second failure sets `status=failed` with the review attached.
 
-## LLM providers
+## Architecture
 
-LiteLLM is used as a single provider layer. You can configure either OpenAI or Anthropic.
+High-level flow from issue to artifacts:
 
-OpenAI (recommended):
+```mermaid
+flowchart TB
+  cli[CLI setup clone context branch]
+  graph[LangGraph closed loop]
+  out[artifacts run_id]
+  cli --> graph --> out
+  subgraph graphNodes [Graph nodes]
+    plan[plan] --> code[code] --> integrate[integrate]
+    integrate --> test[test] --> lint[lint] --> review[review] --> pr[pr]
+    test -->|fail| fix[fix] --> code
+    lint -->|fail| fix
+    review -->|request_changes| fix
+  end
+```
+
+LLM tiers by stage:
+
+```mermaid
+flowchart LR
+  strong[Strong tier planner reviewer]
+  fast[Fast tier coder fixer scope PR]
+  strong --> patch[proposed.patch]
+  fast --> patch
+```
+
+**Full design:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (LangGraph routing, repo skills, optional MCP and memory, risk controls).
+
+## Repository layout
+
+```
+pocket-fm-assignment/
+  src/go_agent/          # CLI, agents, orchestrator, runners
+    cli.py
+    planner.py coder.py reviewer.py fixer.py
+    orchestrator/        # LangGraph graph and nodes
+    skills.py            # Repo skill loading
+  skills/                # Per-repo SKILL.md + _default
+  docs/
+    ARCHITECTURE.md
+    GITHUB_ISSUES.md
+  tests/
+  artifacts/             # Run outputs (gitignored)
+  workspaces/            # Cloned repos (gitignored)
+```
+
+## Limitations
+
+- Only the four approved repositories above can be cloned; others are rejected at startup.
+- The planner, coder, and reviewer require LLM keys. Plan generation does not fall back to heuristics.
+- Fix loops cap at `GO_AGENT_MAX_FIX_ITERATIONS` (default 5). Review-driven fixes cap at `GO_AGENT_MAX_REVIEW_ROUNDS` (default 1).
+- Context is bounded (about 80k characters and 15 files by default). Large issues may omit peripheral code.
+- The agent does not auto-merge. `--create-pr` opens a draft PR through `gh`; you review and merge manually.
+- Work stays isolated under `workspaces/{run_id}/`. The tool does not force-push to upstream default branches.
+- Full `golangci-lint` test suites can be slow, especially on `golangci/golangci-lint`.
+- RAG and Mem0 are optional extras. The core path does not require them.
+- MCP server integration is described in ARCHITECTURE.md but is not part of the default CLI yet.
+
+## Cost and token notes
+
+There is no built-in billing meter. Cost follows your provider rates for `GO_AGENT_MODEL_FAST` and `GO_AGENT_MODEL_STRONG`.
+
+| Stage | Model tier | What drives token usage |
+|-------|------------|-------------------------|
+| Planner | strong | Issue body, context bundle (up to 80k chars), repo skill |
+| Coder | fast | One prompt per planned file (up to 60k chars each), parallel waves |
+| Fix loop | fast | Retries up to max fix iterations with test/lint/review output |
+| Reviewer | strong | Patch diff, test/lint output, skill truncated to 2k chars |
+| Scope / PR | fast | Smaller enrichment prompts |
+
+For a typical single-file fix on gin with one fix cycle, expect on the order of **50k to 200k input tokens**, depending on bundle size, number of files, and retries. To control cost:
+
+- Run with `--dry-run` first.
+- Pick focused issues and smaller repos when experimenting.
+- Lower `GO_AGENT_CONTEXT_MAX_CHARS` or `GO_AGENT_CONTEXT_MAX_FILES`.
+- Use a cheaper fast model for coding while keeping a capable strong model for plan and review.
+
+## Development
 
 ```bash
-OPENAI_API_KEY=sk-...
-GO_AGENT_MODEL_FAST=gpt-4o-mini
-GO_AGENT_MODEL_STRONG=gpt-4o
+pytest -q && ruff check src tests
 ```
 
-Anthropic (optional):
-
-```bash
-ANTHROPIC_API_KEY=sk-ant-...
-GO_AGENT_MODEL_FAST=claude-3-5-haiku-20241022
-GO_AGENT_MODEL_STRONG=claude-3-5-sonnet-20241022
-```
-
-LiteLLM routes by model name and key availability. LLM enrichments are best-effort: if keys are missing
-or a call fails, the pipeline falls back to heuristic/template behavior.
-
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for system design and [docs/GITHUB_ISSUES.md](docs/GITHUB_ISSUES.md) for the step-by-step implementation backlog.
-
-## Stack (recommended)
-
-| Concern | Choice | Why |
-|--------|--------|-----|
-| Orchestration | **LangGraph** | Native **cycles** (code → test → fix) and explicit state; better fit than CrewAI for closed-loop agents |
-| Multi-agent “team” | LangGraph nodes + parallel sub-runs | Fast file-scoped coder workers; optional CrewAI layer only if you prefer its task API |
-| LLM routing | **LiteLLM** | One interface for OpenAI / Anthropic / local models |
-| Repo memory (run) | LangGraph checkpointer + `artifacts/` | Reproducible runs for reviewers |
-| Long-term memory | **Repo index + skills** (not Mem0 first) | Assignment is per-repo/issue; Mem0 adds ops cost with little gain until you run many issues |
-| Optional persistence | Mem0 or **SQLite + embeddings** | Use when you want cross-issue learning on the same repo |
-| Tools / IDE integration | **MCP server** (`mcp/`) | Search, read, edit, `go test`, `gh` — same tools for agents and Cursor |
-| GitHub | **PyGithub** + `gh` subprocess | Issue fetch, branch, PR create |
-
-## Repository layout (target)
-
-```
-go-agent/
-  cli.py                 # Typer CLI entry
-  config.py
-  orchestrator/          # LangGraph workflow
-  agents/                # planner, coder, reviewer prompts
-  tools/                 # github, git, search, subprocess test
-  memory/                # index, run store
-  skills/                # gin, cobra, validator, golangci-lint
-mcp/
-  server.py              # MCP tools for repo + validation
-docs/
-  ARCHITECTURE.md
-  GITHUB_ISSUES.md
-tests/
-```
+The project currently has about 261 tests. Implementation history and artifact schemas live in [IMPLEMENTATION_CONTEXT.md](IMPLEMENTATION_CONTEXT.md). The backlog of GitHub issues is in [docs/GITHUB_ISSUES.md](docs/GITHUB_ISSUES.md).
 
 ## License
 
