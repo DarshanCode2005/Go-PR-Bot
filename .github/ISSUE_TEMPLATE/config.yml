@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Feature roadmap (FEATURE_MAP.md)
+    url: https://github.com/DarshanCode2005/Go-PR-Bot/blob/main/docs/FEATURE_MAP.md
+    about: Check planned features, status, and existing issue links before opening a duplicate
+  - name: Architecture docs
+    url: https://github.com/DarshanCode2005/Go-PR-Bot/blob/main/docs/ARCHITECTURE.md
+    about: LangGraph pipeline design and closed-loop routing

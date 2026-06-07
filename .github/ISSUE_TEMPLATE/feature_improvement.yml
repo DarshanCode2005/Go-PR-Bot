@@ -1,0 +1,35 @@
+name: Feature improvement
+description: Propose a go-agent capability tracked in FEATURE_MAP.md
+labels:
+  - enhancement
+body:
+  - type: input
+    id: feature_map_id
+    attributes:
+      label: Feature MAP ID
+      description: e.g. MAP-P1-003 (see docs/FEATURE_MAP.md)
+      placeholder: MAP-P0-001
+    validations:
+      required: true
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What capability should be added or improved?
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Checklist of verifiable outcomes
+    validations:
+      required: true
+  - type: textarea
+    id: primary_files
+    attributes:
+      label: Primary files
+      description: go-agent modules likely affected
+      placeholder: src/go_agent/fixer.py, orchestrator/nodes.py
+    validations:
+      required: false
