@@ -13,3 +13,6 @@ checkpoints/
 .gitignore
 docs/
 scripts/
+docs/GITHUB_ISSUES.md
+docs/
+IMPLEMENTATION_CONTEXT.md
