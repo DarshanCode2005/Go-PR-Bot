@@ -16,16 +16,20 @@ from go_agent.coder import (
     _read_file_for_coding,
     apply_search_replace_blocks,
     build_proposed_patch,
+    collect_coder_anchors,
     extract_paths_from_unified_diff,
     generate_file_patch,
     normalize_llm_patch,
     parse_search_replace_blocks,
+    sanitize_llm_patch_output,
     schedule_coder_waves,
+    slice_file_for_coder_prompt,
     validate_patch_scope,
     write_coder_artifact,
 )
 from go_agent.config import Settings, clear_settings_cache
 from go_agent.context_builder import ContextBundle, ContextFileEntry
+from go_agent.coder import PlanSlice
 from go_agent.github_issues import IssueContext
 from go_agent.planner import FixPlan
 from go_agent.run_context import create_run_context
@@ -404,3 +408,114 @@ def test_read_file_with_dependency_overlay(tmp_path):
     assert context is not None
     assert "func Foo() int { return 1 }" in context
     assert _read_file_for_coding(repo, "pkg/bar.go", settings) == "package pkg\n\n// uses Foo\n"
+
+
+def test_collect_coder_anchors_from_plan():
+    plan_slice = PlanSlice(
+        file_path="validator_test.go",
+        steps=["Modify `isUnixAddrResolvable` in baked_in.go"],
+        test_commands=["go test -race -run TestUnixDomainSocketExistsValidation ./..."],
+        acceptance_criteria=[],
+    )
+    anchors = collect_coder_anchors(plan_slice)
+    assert "TestUnixDomainSocketExistsValidation" in anchors
+    assert "isUnixAddrResolvable" in anchors
+
+
+def test_slice_file_for_coder_prompt_keeps_small_files():
+    content = "package main\n\nfunc Foo() {}\n"
+    plan_slice = PlanSlice(
+        file_path="main.go",
+        steps=["Change Foo"],
+        test_commands=[],
+        acceptance_criteria=[],
+    )
+    sliced, truncated = slice_file_for_coder_prompt(content, plan_slice, 60000)
+    assert sliced == content
+    assert truncated is False
+
+
+def test_slice_file_for_coder_prompt_extracts_test_region():
+    filler = "// filler line\n" * 8000
+    target = (
+        "func TestUnixDomainSocketExistsValidation(t *testing.T) {\n"
+        "\terr := validate.Var(\"/tmp/x.sock\", \"unix_addr\")\n"
+        "\t_ = err\n"
+        "}\n"
+    )
+    content = f"package validator\n\n{filler}{target}"
+    plan_slice = PlanSlice(
+        file_path="validator_test.go",
+        steps=["Update TestUnixDomainSocketExistsValidation for unix_addr"],
+        test_commands=["go test -run TestUnixDomainSocketExistsValidation ./..."],
+        acceptance_criteria=[],
+    )
+    sliced, truncated = slice_file_for_coder_prompt(content, plan_slice, 60000)
+    assert truncated is True
+    assert len(sliced) <= 60000
+    assert "TestUnixDomainSocketExistsValidation" in sliced
+    assert "package validator" in sliced
+
+
+def test_read_large_file_no_longer_raises(tmp_path):
+    repo = _init_fixture_repo(tmp_path)
+    big = "package pkg\n\n" + ("// x\n" * 20000)
+    (repo / "pkg" / "big.go").write_text(big, encoding="utf-8")
+    settings = Settings(coder_max_file_chars=60000)
+    content = _read_file_for_coding(repo, "pkg/big.go", settings)
+    assert len(content) > settings.coder_max_file_chars
+
+
+def test_sanitize_llm_patch_output_strips_fences():
+    raw = """```diff
+--- SEARCH
+func Foo() {}
++++ REPLACE
+func Foo() int { return 1 }
+```"""
+    cleaned = sanitize_llm_patch_output(raw)
+    assert "```" not in cleaned
+    assert "--- SEARCH" in cleaned
+
+
+def test_normalize_llm_patch_accepts_fenced_search_replace():
+    original = "func isUnixAddrResolvable(fl FieldLevel) bool {\n\t_, err := net.ResolveUnixAddr(\"unix\", fl.Field().String())\n\n\treturn err == nil\n}\n"
+    fenced = """```diff
+--- SEARCH
+func isUnixAddrResolvable(fl FieldLevel) bool {
+    _, err := net.ResolveUnixAddr("unix", fl.Field().String())
+
+    return err == nil
+}
++++ REPLACE
+func isUnixAddrResolvable(fl FieldLevel) bool {
+    return isSocketPath(fl.Field().String())
+}
+```"""
+    plan = FixPlan(
+        issue_number=1,
+        repo="go-playground/validator",
+        files=["baked_in.go"],
+        steps=["Fix unix addr"],
+        test_commands=["go test ./..."],
+        acceptance_criteria=["Tests pass"],
+    )
+    patch = normalize_llm_patch("baked_in.go", original, fenced, plan)
+    assert "isSocketPath" in patch.patch
+    assert "```" not in patch.patch
+
+
+def test_apply_search_replace_spaces_to_tabs():
+    original = "func Foo() {\n\treturn 1\n}\n"
+    blocks = parse_search_replace_blocks("""--- SEARCH
+func Foo() {
+    return 1
+}
++++ REPLACE
+func Foo() {
+    return 2
+}
+""")
+    updated = apply_search_replace_blocks(original, blocks)
+    assert "return 2" in updated
+    assert "\treturn 2" in updated

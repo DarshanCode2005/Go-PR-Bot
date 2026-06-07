@@ -39,7 +39,7 @@ def test_load_skill_text_for_golangci_lint():
 
 def test_resolve_test_commands_uses_golangci_lint_skill_override():
     commands, source = resolve_test_commands(_plan(), _REPO)
-    assert source == "skill_override"
+    assert source == "merged"
     assert commands == ["GL_TEST_RUN=1 go test ./... -count=1 -parallel 2"]
 
 

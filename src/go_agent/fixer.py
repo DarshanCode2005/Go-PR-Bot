@@ -32,12 +32,19 @@ _GO_FILE = re.compile(r"(?:\./)?([\w./-]+\.go)")
 FIXER_SYSTEM_PROMPT = """You are a Go fix agent correcting code after test or lint failures.
 
 Given the plan, current file content, and validation errors, emit the smallest correct fix.
-Output either SEARCH/REPLACE blocks or a unified diff for the target file only.
+Output either:
+1) SEARCH/REPLACE blocks only (preferred):
+--- SEARCH
+<exact lines copied from the file>
++++ REPLACE
+<replacement lines>
+2) OR a unified diff for the target file only.
 
 Rules:
 - Edit ONLY the file named in the user message
 - Fix the reported errors without unrelated refactors
-- SEARCH text must match the file exactly"""
+- SEARCH text must match the file exactly (copy indentation character-for-character)
+- Do NOT wrap output in markdown code fences (no ``` lines)"""
 
 
 class FixError(RuntimeError):
@@ -126,7 +133,7 @@ def _failure_summary(fix_context: FixContext) -> str:
     return "\n\n".join(parts)
 
 
-def _prioritize_plan_files(plan: FixPlan, fix_context: FixContext) -> list[str]:
+def _collect_mentioned_files(fix_context: FixContext) -> set[str]:
     mentioned: set[str] = set()
     for item in fix_context.lint_findings:
         raw = item.get("file")
@@ -135,6 +142,11 @@ def _prioritize_plan_files(plan: FixPlan, fix_context: FixContext) -> list[str]:
     combined = fix_context.test_output + "\n" + fix_context.lint_output
     for match in _GO_FILE.finditer(combined):
         mentioned.add(normalize_file_path(match.group(1)))
+    return mentioned
+
+
+def _prioritize_plan_files(plan: FixPlan, fix_context: FixContext) -> list[str]:
+    mentioned = _collect_mentioned_files(fix_context)
 
     ordered: list[str] = []
     for path in plan.files:
@@ -144,6 +156,54 @@ def _prioritize_plan_files(plan: FixPlan, fix_context: FixContext) -> list[str]:
         if path not in ordered:
             ordered.append(path)
     return ordered or list(plan.files)
+
+
+def expand_fix_files(
+    plan: FixPlan,
+    fix_context: FixContext,
+    repo_path: Path,
+    *,
+    max_extra: int = 2,
+) -> list[str]:
+    """Expand fix scope with files mentioned in failures that exist on disk."""
+    ordered = _prioritize_plan_files(plan, fix_context)
+    mentioned = _collect_mentioned_files(fix_context)
+    plan_normalized = {normalize_file_path(path) for path in plan.files}
+
+    fail_mentioned: list[str] = []
+    for line in fix_context.test_output.splitlines():
+        upper = line.upper()
+        if "FAIL:" in upper or upper.strip().startswith("--- FAIL"):
+            for match in _GO_FILE.finditer(line):
+                fail_mentioned.append(normalize_file_path(match.group(1)))
+
+    extra_candidates: list[str] = []
+    seen_extra: set[str] = set()
+
+    def consider(path: str) -> None:
+        norm = normalize_file_path(path)
+        if norm in plan_normalized or norm in seen_extra:
+            return
+        if not (repo_path / norm).is_file():
+            return
+        seen_extra.add(norm)
+        extra_candidates.append(norm)
+
+    for path in fail_mentioned:
+        consider(path)
+    for path in sorted(mentioned):
+        if path.endswith("_test.go"):
+            consider(path)
+    for path in sorted(mentioned):
+        consider(path)
+
+    cap = len(plan.files) + max_extra
+    result = list(ordered)
+    for path in extra_candidates:
+        if len(result) >= cap:
+            break
+        result.append(path)
+    return result
 
 
 def build_corrective_patch(
@@ -161,7 +221,10 @@ def build_corrective_patch(
         raise FixError("LLM API key required for fix agent")
 
     failure_text = _failure_summary(fix_context)
-    target_files = _prioritize_plan_files(plan, fix_context)
+    target_files = expand_fix_files(plan, fix_context, repo_path)
+    added = [path for path in target_files if path not in plan.files]
+    if added:
+        log.info("fix scope expanded: %s", ", ".join(f"+{path}" for path in added))
     if not target_files:
         raise FixError("plan.files is empty; nothing to fix")
 
@@ -241,6 +304,7 @@ def _generate_fix_file_patch(
         _dependency_context_for_file,
         _read_file_for_coding,
         build_coder_messages,
+        slice_file_for_coder_prompt,
     )
 
     file_content = _read_file_for_coding(repo_path, file_path, settings)
@@ -255,28 +319,53 @@ def _generate_fix_file_patch(
     from go_agent.coder import _bundle_entry_for_file
 
     bundle_entry = _bundle_entry_for_file(context_bundle, file_path)
+    prompt_content, file_excerpt = slice_file_for_coder_prompt(
+        file_content,
+        plan_slice,
+        settings.coder_max_file_chars,
+    )
     messages = build_coder_messages(
         issue,
         plan_slice,
-        file_content,
+        prompt_content,
         bundle_entry,
         correction=failure_text,
         dependency_context=dependency_context,
+        file_excerpt=file_excerpt,
     )
     messages[0]["content"] = FIXER_SYSTEM_PROMPT
 
-    try:
-        from go_agent.llm_client import complete
-        from go_agent.coder import normalize_llm_patch
+    from go_agent.llm_client import complete
+    from go_agent.coder import normalize_llm_patch
 
+    try:
         content = complete(messages, tier="fast", settings=settings)
         if not content:
             raise FixError(f"LLM completion failed for {file_path}")
         patch = normalize_llm_patch(file_path, file_content, content, plan)
         logger.info("Fix patch generated for %s (%s)", file_path, patch.format)
         return patch
-    except CoderError as exc:
-        raise FixError(f"fix agent failed for {file_path}: {exc}") from exc
+    except CoderError as first_error:
+        logger.warning("Fix first attempt failed for %s: %s", file_path, first_error)
+        retry_messages = list(messages)
+        retry_messages.append(
+            {
+                "role": "user",
+                "content": (
+                    f"Previous output was invalid: {first_error}. "
+                    "Return SEARCH/REPLACE blocks or a unified diff for this file only."
+                ),
+            }
+        )
+        content = complete(retry_messages, tier="fast", settings=settings)
+        if not content:
+            raise FixError(f"Fix failed after retry for {file_path}") from first_error
+        try:
+            patch = normalize_llm_patch(file_path, file_content, content, plan)
+            logger.info("Fix patch generated for %s on retry (%s)", file_path, patch.format)
+            return patch
+        except CoderError as retry_error:
+            raise FixError(f"fix agent failed for {file_path}: {retry_error}") from retry_error
 
 
 def write_fix_meta(ctx: RunContext, meta: FixMeta) -> Path:
@@ -293,5 +382,6 @@ __all__ = [
     "build_corrective_patch",
     "build_failure_context",
     "build_review_fix_context",
+    "expand_fix_files",
     "write_fix_meta",
 ]

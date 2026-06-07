@@ -223,15 +223,92 @@ def _validate_fix_plan(payload: dict, issue: IssueContext) -> FixPlan:
         raise PlanError(msg) from exc
 
 
+def enrich_fix_plan_payload(
+    payload: dict,
+    *,
+    context_bundle: ContextBundle,
+    repo_path: Path | None = None,
+) -> dict:
+    """Sanitize file_dependencies and inject related test files before validation."""
+    enriched = dict(payload)
+    files = [str(item).strip() for item in (enriched.get("files") or []) if str(item).strip()]
+    normalized_files = {normalize_file_path(path) for path in files}
+
+    cleaned_deps: dict[str, list[str]] = {}
+    for raw_key, raw_values in (enriched.get("file_dependencies") or {}).items():
+        key = normalize_file_path(str(raw_key))
+        if key not in normalized_files:
+            continue
+        cleaned: list[str] = []
+        for raw_dep in raw_values or []:
+            dep = normalize_file_path(str(raw_dep))
+            if dep in normalized_files and dep != key and dep not in cleaned:
+                canonical = next(
+                    (path for path in files if normalize_file_path(path) == dep),
+                    str(raw_dep),
+                )
+                cleaned.append(canonical)
+        if cleaned:
+            canonical_key = next(
+                (path for path in files if normalize_file_path(path) == key),
+                str(raw_key),
+            )
+            cleaned_deps[canonical_key] = cleaned
+    enriched["file_dependencies"] = cleaned_deps
+
+    known_test_files: set[str] = set()
+    path_by_norm: dict[str, str] = {}
+    for entry in context_bundle.files:
+        norm = normalize_file_path(entry.path)
+        path_by_norm[norm] = entry.path
+        if norm.endswith("_test.go"):
+            known_test_files.add(norm)
+    if repo_path is not None:
+        for test_file in repo_path.rglob("*_test.go"):
+            norm = normalize_file_path(test_file.relative_to(repo_path).as_posix())
+            known_test_files.add(norm)
+            path_by_norm.setdefault(norm, norm)
+
+    additions: list[str] = []
+    seen_additions: set[str] = set()
+    for path in files:
+        norm = normalize_file_path(path)
+        if not norm.endswith(".go") or norm.endswith("_test.go"):
+            continue
+        stem_test = normalize_file_path(
+            str(Path(norm).with_name(f"{Path(norm).stem}_test.go"))
+        )
+        for candidate in sorted(known_test_files):
+            if candidate in normalized_files or candidate in seen_additions:
+                continue
+            same_dir = Path(norm).parent == Path(candidate).parent
+            if candidate == stem_test or same_dir:
+                seen_additions.add(candidate)
+                normalized_files.add(candidate)
+                additions.append(path_by_norm.get(candidate, candidate))
+
+    enriched["files"] = files + additions
+    return enriched
+
+
 def _request_plan(
     issue: IssueContext,
     messages: list[dict[str, str]],
     settings: Settings,
+    *,
+    context_bundle: ContextBundle | None = None,
+    repo_path: Path | None = None,
 ) -> FixPlan:
     content = complete(messages, tier="strong", settings=settings)
     if not content:
         raise PlanError("LLM completion failed")
     payload = _parse_plan_json(content)
+    if context_bundle is not None:
+        payload = enrich_fix_plan_payload(
+            payload,
+            context_bundle=context_bundle,
+            repo_path=repo_path,
+        )
     return _validate_fix_plan(payload, issue)
 
 
@@ -241,6 +318,8 @@ def build_fix_plan(
     scope_hints: list[str],
     settings: Settings,
     logger: logging.Logger | None = None,
+    *,
+    repo_path: Path | None = None,
 ) -> FixPlan:
     """Build and validate a structured fix plan; raises PlanError on failure."""
     log = logger or logging.getLogger("go_agent")
@@ -249,7 +328,13 @@ def build_fix_plan(
 
     messages = build_planner_messages(issue, context_bundle, scope_hints)
     try:
-        plan = _request_plan(issue, messages, settings)
+        plan = _request_plan(
+            issue,
+            messages,
+            settings,
+            context_bundle=context_bundle,
+            repo_path=repo_path,
+        )
         log.info(
             "Fix plan built: %d files, %d steps",
             len(plan.files),
@@ -269,7 +354,13 @@ def build_fix_plan(
             ),
         )
         try:
-            plan = _request_plan(issue, retry_messages, settings)
+            plan = _request_plan(
+                issue,
+                retry_messages,
+                settings,
+                context_bundle=context_bundle,
+                repo_path=repo_path,
+            )
             log.info("Fix plan built on retry")
             return plan
         except PlanError as retry_error:

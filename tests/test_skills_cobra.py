@@ -37,7 +37,7 @@ def test_load_skill_text_for_cobra():
 
 def test_resolve_test_commands_uses_cobra_skill_override():
     commands, source = resolve_test_commands(_plan(), _REPO)
-    assert source == "skill_override"
+    assert source == "merged"
     assert commands == ["go test ./... -count=1"]
 
 

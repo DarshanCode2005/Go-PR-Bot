@@ -13,7 +13,7 @@ from go_agent.config import Settings, clear_settings_cache
 from go_agent.context_builder import ContextBundle, ContextFileEntry
 from go_agent.github_issues import IssueContext
 from go_agent.llm_client import set_completion_transport
-from go_agent.planner import FixPlan, PlanError, build_fix_plan, write_plan
+from go_agent.planner import FixPlan, PlanError, build_fix_plan, enrich_fix_plan_payload, write_plan
 from go_agent.run_context import create_run_context
 
 VALID_PLAN_JSON = (
@@ -214,3 +214,87 @@ def test_fix_plan_rejects_cycle():
                 },
             }
         )
+
+
+def test_enrich_fix_plan_payload_strips_unknown_dependencies():
+    payload = enrich_fix_plan_payload(
+        {
+            "files": ["baked_in.go"],
+            "steps": ["Fix unix_addr"],
+            "test_commands": ["go test -run TestUnixAddrValidation -count=1"],
+            "acceptance_criteria": ["Tests pass"],
+            "file_dependencies": {"validator.go": ["baked_in.go"], "baked_in.go": ["validator.go"]},
+        },
+        context_bundle=_bundle(),
+    )
+    plan = FixPlan.model_validate(
+        {
+            **payload,
+            "issue_number": 32,
+            "repo": "go-playground/validator",
+        }
+    )
+    assert plan.files == ["baked_in.go"]
+    assert plan.file_dependencies == {}
+
+
+def test_enrich_fix_plan_payload_adds_test_file_from_bundle():
+    bundle = ContextBundle(
+        issue_number=32,
+        repo="go-playground/validator",
+        budget_chars=80000,
+        total_chars=120,
+        files=[
+            ContextFileEntry(
+                path="baked_in.go",
+                rationale="validation tag",
+                graph_distance=0,
+                content_tier="snippet",
+                content="func isUnixAddr() {}",
+                char_count=20,
+            ),
+            ContextFileEntry(
+                path="validator_test.go",
+                rationale="regression test",
+                graph_distance=1,
+                content_tier="snippet",
+                content="func TestUnixAddrValidation(t *testing.T) {}",
+                char_count=40,
+            ),
+        ],
+    )
+    payload = enrich_fix_plan_payload(
+        {
+            "files": ["baked_in.go"],
+            "steps": ["Fix unix_addr"],
+            "test_commands": ["go test -run TestUnixAddrValidation -count=1"],
+            "acceptance_criteria": ["Tests pass"],
+        },
+        context_bundle=bundle,
+    )
+    assert payload["files"] == ["baked_in.go", "validator_test.go"]
+
+
+def test_build_fix_plan_sanitizes_invalid_dependencies_without_retry(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    transport = RecordingTransport(
+        [
+            '{"files":["baked_in.go"],'
+            '"steps":["Fix unix_addr"],'
+            '"test_commands":["go test -run TestUnixAddrValidation -count=1"],'
+            '"acceptance_criteria":["Tests pass"],'
+            '"file_dependencies":{"validator.go":["baked_in.go"]}}'
+        ]
+    )
+    set_completion_transport(transport)
+    issue = IssueContext(
+        repo="go-playground/validator",
+        number=32,
+        title="unix_addr validation",
+        body="Fix unix_addr",
+        state="open",
+    )
+    plan = build_fix_plan(issue, _bundle(), ["unix_addr"], Settings())
+    assert plan.files == ["baked_in.go"]
+    assert plan.file_dependencies == {}
+    assert len(transport.calls) == 1

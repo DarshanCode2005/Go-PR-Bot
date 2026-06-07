@@ -22,6 +22,10 @@ from go_agent.utils import normalize_file_path
 from go_agent.run_context import RunContext
 
 _DIFF_GIT = re.compile(r"^diff --git a/(.+?) b/", re.MULTILINE)
+_RUN_TEST_RE = re.compile(r"-run\s+(\S+)")
+_BACKTICK_RE = re.compile(r"`([^`]+)`")
+_PLAN_IDENT_RE = re.compile(r"\b(?:Test[A-Z]\w*|is[A-Z]\w*)\b")
+_READ_FILE_MAX_CHARS = 2_000_000
 CODER_SYSTEM_PROMPT = """You are a Go coder agent editing exactly one file for a GitHub issue fix.
 
 Output either:
@@ -35,7 +39,8 @@ Output either:
 Rules:
 - Edit ONLY the file named in the user message
 - Do not modify or reference other files
-- SEARCH text must match the file exactly
+- SEARCH text must match the file exactly (copy indentation character-for-character)
+- Do NOT wrap output in markdown code fences (no ``` lines)
 - Make the smallest correct change"""
 
 
@@ -255,15 +260,69 @@ def validate_patch_scope(patch: str, allowed: set[str]) -> None:
             raise CoderError(msg)
 
 
+_FENCE_LINE_RE = re.compile(r"^```(?:diff|go|patch)?\s*$")
+
+
+def sanitize_llm_patch_output(text: str) -> str:
+    """Strip markdown code fences and other noise from LLM patch output."""
+    stripped = text.strip()
+    if stripped.startswith("```"):
+        lines = stripped.splitlines()
+        if lines and lines[0].startswith("```"):
+            lines = lines[1:]
+        while lines and _FENCE_LINE_RE.match(lines[-1].strip()):
+            lines.pop()
+        stripped = "\n".join(lines).strip()
+
+    cleaned: list[str] = []
+    for line in stripped.splitlines():
+        if _FENCE_LINE_RE.match(line.strip()):
+            continue
+        cleaned.append(line)
+    return "\n".join(cleaned).strip()
+
+
+def _indent_spaces_to_tabs(text: str) -> str:
+    """Convert 4-space indents to tabs (common LLM mistake on Go files)."""
+    lines: list[str] = []
+    for line in text.splitlines():
+        match = re.match(r"^( +)([\S].*)$", line)
+        if match and len(match.group(1)) % 4 == 0:
+            lines.append("\t" * (len(match.group(1)) // 4) + match.group(2))
+        else:
+            lines.append(line)
+    return "\n".join(lines)
+
+
+def _search_variants(search: str) -> list[str]:
+    variants: list[str] = [search]
+    tabbed = _indent_spaces_to_tabs(search)
+    if tabbed not in variants:
+        variants.append(tabbed)
+    spaced = search.replace("\t", "    ")
+    if spaced not in variants:
+        variants.append(spaced)
+    return variants
+
+
+def _resolve_search_match(content: str, search: str) -> str | None:
+    for candidate in _search_variants(search):
+        count = content.count(candidate)
+        if count == 1:
+            return candidate
+    return None
+
+
 def parse_search_replace_blocks(text: str) -> list[tuple[str, str]]:
+    cleaned = sanitize_llm_patch_output(text)
     pattern = re.compile(
         r"--- SEARCH\s*\n(.*?)\n\+\+\+ REPLACE\s*\n(.*?)(?=\n--- SEARCH\s*\n|\Z)",
         re.DOTALL,
     )
     blocks: list[tuple[str, str]] = []
-    for match in pattern.finditer(text.strip()):
+    for match in pattern.finditer(cleaned):
         search = match.group(1)
-        replace = match.group(2).rstrip("\n")
+        replace = sanitize_llm_patch_output(match.group(2).rstrip("\n"))
         if not search:
             msg = "SEARCH block must not be empty"
             raise CoderError(msg)
@@ -277,11 +336,14 @@ def parse_search_replace_blocks(text: str) -> list[tuple[str, str]]:
 def apply_search_replace_blocks(content: str, blocks: list[tuple[str, str]]) -> str:
     updated = content
     for search, replace in blocks:
-        count = updated.count(search)
-        if count != 1:
+        matched = _resolve_search_match(updated, search)
+        if matched is None:
+            count = updated.count(search)
             msg = f"SEARCH block must match exactly once (found {count} matches)"
             raise CoderError(msg)
-        updated = updated.replace(search, replace, 1)
+        if matched != search:
+            replace = _indent_spaces_to_tabs(replace) if "\t" in matched and "    " in replace else replace
+        updated = updated.replace(matched, replace, 1)
     return updated
 
 
@@ -338,7 +400,7 @@ def normalize_llm_patch(
     plan: FixPlan,
 ) -> FilePatch:
     assert_file_in_plan(path, plan)
-    text = llm_output.strip()
+    text = sanitize_llm_patch_output(llm_output)
     if _is_unified_diff(text):
         validate_patch_scope(text, set(plan.files))
         return FilePatch(path=path, format="unified_diff", patch=text)
@@ -376,6 +438,112 @@ def _bundle_entry_for_file(
     return None
 
 
+def collect_coder_anchors(plan_slice: PlanSlice) -> list[str]:
+    """Extract symbol names from plan steps and test commands for file slicing."""
+    anchors: list[str] = []
+    seen: set[str] = set()
+
+    def add(value: str) -> None:
+        cleaned = value.strip()
+        if cleaned and cleaned not in seen:
+            seen.add(cleaned)
+            anchors.append(cleaned)
+
+    for command in plan_slice.test_commands:
+        for match in _RUN_TEST_RE.finditer(command):
+            add(match.group(1))
+    for step in plan_slice.steps:
+        for match in _BACKTICK_RE.finditer(step):
+            add(match.group(1))
+        for match in _PLAN_IDENT_RE.finditer(step):
+            add(match.group(0))
+    return anchors
+
+
+def _go_func_end_line(lines: list[str], func_line_idx: int) -> int:
+    depth = 0
+    started = False
+    for i in range(func_line_idx, len(lines)):
+        for ch in lines[i]:
+            if ch == "{":
+                depth += 1
+                started = True
+            elif ch == "}":
+                depth -= 1
+                if started and depth == 0:
+                    return i
+    return min(func_line_idx + 300, len(lines) - 1)
+
+
+def _merge_line_ranges(ranges: list[tuple[int, int]]) -> list[tuple[int, int]]:
+    if not ranges:
+        return []
+    merged: list[tuple[int, int]] = [sorted(ranges)[0]]
+    for start, end in sorted(ranges)[1:]:
+        prev_start, prev_end = merged[-1]
+        if start <= prev_end + 1:
+            merged[-1] = (prev_start, max(prev_end, end))
+        else:
+            merged.append((start, end))
+    return merged
+
+
+def _find_anchor_regions(lines: list[str], anchors: list[str]) -> list[tuple[int, int]]:
+    regions: list[tuple[int, int]] = []
+    for anchor in anchors:
+        func_pattern = re.compile(rf"^func\s+(?:\([^)]*\)\s+)?{re.escape(anchor)}\b")
+        matched = False
+        for i, line in enumerate(lines):
+            if func_pattern.search(line):
+                start = max(0, i - 15)
+                end = min(len(lines) - 1, _go_func_end_line(lines, i) + 5)
+                regions.append((start, end))
+                matched = True
+                break
+        if matched:
+            continue
+        for i, line in enumerate(lines):
+            if anchor in line:
+                regions.append((max(0, i - 15), min(len(lines) - 1, i + 80)))
+                break
+    return regions
+
+
+def slice_file_for_coder_prompt(
+    content: str,
+    plan_slice: PlanSlice,
+    max_chars: int,
+) -> tuple[str, bool]:
+    """Return an excerpt of a large file sized for the LLM prompt."""
+    if len(content) <= max_chars:
+        return content, False
+
+    lines = content.splitlines(keepends=True)
+    if not lines:
+        return content, False
+
+    anchors = collect_coder_anchors(plan_slice)
+    regions = _find_anchor_regions(lines, anchors)
+    header_end = min(29, len(lines) - 1)
+    regions = _merge_line_ranges([(0, header_end)] + regions)
+
+    parts: list[str] = []
+    for start, end in regions:
+        if parts:
+            parts.append(f"\n// ... [lines {start + 1}-{end + 1} of {len(lines)}] ...\n")
+        parts.append("".join(lines[start : end + 1]))
+
+    excerpt = "".join(parts)
+    note = (
+        f"\n\nNOTE: Full file is {len(content)} characters; only relevant sections are shown. "
+        "SEARCH text must match the excerpt exactly."
+    )
+    budget = max(0, max_chars - len(note))
+    if len(excerpt) > budget:
+        excerpt = excerpt[:budget] + "\n// ... [excerpt truncated to prompt budget] ...\n"
+    return excerpt + note, True
+
+
 def build_coder_messages(
     issue: IssueContext,
     plan_slice: PlanSlice,
@@ -384,17 +552,19 @@ def build_coder_messages(
     *,
     correction: str | None = None,
     dependency_context: str | None = None,
+    file_excerpt: bool = False,
 ) -> list[dict[str, str]]:
     steps = "\n".join(f"- {step}" for step in plan_slice.steps)
     tests = "\n".join(f"- {command}" for command in plan_slice.test_commands)
     criteria = "\n".join(f"- {item}" for item in plan_slice.acceptance_criteria)
+    file_label = "Current file excerpt" if file_excerpt else "Current file content"
     context_bits: list[str] = [
         f"Issue #{issue.number}: {issue.title}",
         f"Target file: {plan_slice.file_path}",
         f"Plan steps:\n{steps}",
         f"Test commands:\n{tests}",
         f"Acceptance criteria:\n{criteria}",
-        f"Current file content:\n{file_content}",
+        f"{file_label}:\n{file_content}",
     ]
     if bundle_entry is not None:
         context_bits.append(
@@ -420,8 +590,8 @@ def _read_repo_file(repo_path: Path, file_path: str, settings: Settings) -> str:
         msg = f"planned file not found in repo: {file_path}"
         raise CoderError(msg)
     content = full_path.read_text(encoding="utf-8")
-    if len(content) > settings.coder_max_file_chars:
-        msg = f"file {file_path} exceeds coder_max_file_chars"
+    if len(content) > _READ_FILE_MAX_CHARS:
+        msg = f"file {file_path} exceeds maximum readable size ({_READ_FILE_MAX_CHARS} chars)"
         raise CoderError(msg)
     return content
 
@@ -451,12 +621,18 @@ def generate_file_patch(
     )
     plan_slice = plan_slice_for_file(plan, normalized_path)
     bundle_entry = _bundle_entry_for_file(context_bundle, normalized_path)
+    prompt_content, file_excerpt = slice_file_for_coder_prompt(
+        original,
+        plan_slice,
+        settings.coder_max_file_chars,
+    )
     messages = build_coder_messages(
         issue,
         plan_slice,
-        original,
+        prompt_content,
         bundle_entry,
         dependency_context=dependency_context,
+        file_excerpt=file_excerpt,
     )
 
     try:
@@ -471,13 +647,14 @@ def generate_file_patch(
         retry_messages = build_coder_messages(
             issue,
             plan_slice,
-            original,
+            prompt_content,
             bundle_entry,
             correction=(
                 f"Previous output was invalid: {first_error}. "
                 "Return SEARCH/REPLACE blocks or a unified diff for this file only."
             ),
             dependency_context=dependency_context,
+            file_excerpt=file_excerpt,
         )
         content = complete(retry_messages, tier="fast", settings=settings)
         if not content:

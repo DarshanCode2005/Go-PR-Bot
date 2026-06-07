@@ -134,14 +134,43 @@ def parse_skill_test_commands(skill_text: str) -> list[str] | None:
     )
 
 
-def resolve_test_commands(plan: FixPlan, repo: str) -> tuple[list[str], str]:
-    """Resolve commands from repo skill override or plan.test_commands."""
+TestCommandSource = Literal["plan", "skill", "merged"]
+
+
+def _load_skill_test_commands(repo: str) -> list[str] | None:
     repo_skill = _SKILLS_ROOT / repo_slug(repo) / "SKILL.md"
     if repo_skill.is_file():
-        overrides = parse_skill_test_commands(repo_skill.read_text(encoding="utf-8"))
-        if overrides:
-            return overrides, "skill_override"
-    return list(plan.test_commands), "plan"
+        return parse_skill_test_commands(repo_skill.read_text(encoding="utf-8"))
+    return None
+
+
+def resolve_test_commands(
+    plan: FixPlan,
+    repo: str,
+    *,
+    iteration: int = 0,
+    max_fix_iterations: int = 0,
+    phase: Literal["fix", "final"] | None = None,
+) -> tuple[list[str], TestCommandSource]:
+    """Resolve test commands from plan, skill, or both depending on fix phase."""
+    plan_commands = list(plan.test_commands)
+    skill_commands = _load_skill_test_commands(repo)
+
+    if phase is None:
+        if max_fix_iterations <= 0:
+            phase = "final"
+        else:
+            phase = "fix" if iteration < max_fix_iterations else "final"
+
+    if not skill_commands:
+        return plan_commands, "plan"
+
+    if phase == "fix" and plan_commands:
+        return plan_commands, "plan"
+
+    if plan_commands and skill_commands:
+        return list(skill_commands), "merged"
+    return list(skill_commands), "skill"
 
 
 def _parse_frontmatter_lint_commands(skill_text: str) -> list[str] | None:

@@ -36,8 +36,21 @@ def test_load_skill_text_for_validator():
 
 def test_resolve_test_commands_uses_validator_skill_override():
     commands, source = resolve_test_commands(_plan(), _REPO)
-    assert source == "skill_override"
+    assert source == "merged"
     assert commands == ["go test -race ./... -count=1"]
+
+
+def test_resolve_test_commands_validator_fix_phase_uses_plan():
+    plan = _plan()
+    plan.test_commands = ["go test -run TestUnixAddrValidation -count=1"]
+    commands, source = resolve_test_commands(
+        plan,
+        _REPO,
+        iteration=0,
+        max_fix_iterations=5,
+    )
+    assert source == "plan"
+    assert commands == ["go test -run TestUnixAddrValidation -count=1"]
 
 
 def test_resolve_lint_commands_uses_validator_skill_override(tmp_path):

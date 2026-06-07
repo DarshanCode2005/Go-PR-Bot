@@ -39,7 +39,7 @@ class TestRunResult(BaseModel):
     passed: bool
     commands: list[CommandResult] = Field(default_factory=list)
     resolved_commands: list[str] = Field(default_factory=list)
-    source: Literal["plan", "skill_override"]
+    source: Literal["plan", "skill", "merged"]
     plan_commands: list[str] = Field(default_factory=list)
 
 
@@ -63,7 +63,7 @@ def run_test_commands(
     *,
     timeout: int,
     logger: logging.Logger | None = None,
-    source: Literal["plan", "skill_override"] = "plan",
+    source: Literal["plan", "skill", "merged"] = "plan",
     plan_commands: list[str] | None = None,
 ) -> TestRunResult:
     """Run shell test commands in repo_path; pass only if all exit 0."""
@@ -136,15 +136,23 @@ def run_tests(
     repo: str,
     settings: Settings,
     logger: logging.Logger | None = None,
+    *,
+    iteration: int = 0,
+    max_fix_iterations: int = 0,
 ) -> TestRunResult:
     """Resolve and run test commands for a fix plan."""
-    commands, source = resolve_test_commands(plan, repo)
+    commands, source = resolve_test_commands(
+        plan,
+        repo,
+        iteration=iteration,
+        max_fix_iterations=max_fix_iterations,
+    )
     return run_test_commands(
         repo_path,
         commands,
         timeout=settings.test_timeout,
         logger=logger,
-        source=source,  # type: ignore[arg-type]
+        source=source,
         plan_commands=list(plan.test_commands),
     )
 

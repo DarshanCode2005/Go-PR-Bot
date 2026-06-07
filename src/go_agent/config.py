@@ -54,6 +54,8 @@ class Settings(BaseSettings):
 
     openai_api_key: str | None = Field(default=None, validation_alias="OPENAI_API_KEY")
     anthropic_api_key: str | None = Field(default=None, validation_alias="ANTHROPIC_API_KEY")
+    groq_api_key: str | None = Field(default=None, validation_alias="GROQ_API_KEY")
+    xai_api_key: str | None = Field(default=None, validation_alias="XAI_API_KEY")
     github_token: str | None = Field(default=None, validation_alias="GITHUB_TOKEN")
     model_fast: str = "gpt-4o-mini"
     model_strong: str = "gpt-4o"

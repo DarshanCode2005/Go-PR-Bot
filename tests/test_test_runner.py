@@ -51,7 +51,30 @@ def test_resolve_test_commands_uses_plan_by_default():
 
 def test_resolve_test_commands_skill_frontmatter_override():
     commands, source = resolve_test_commands(_plan(), "gin-gonic/gin")
-    assert source == "skill_override"
+    assert source == "merged"
+    assert commands == ["go test ./... -count=1"]
+
+
+def test_resolve_test_commands_fix_phase_uses_plan():
+    plan = _plan()
+    commands, source = resolve_test_commands(
+        plan,
+        "gin-gonic/gin",
+        iteration=0,
+        max_fix_iterations=5,
+    )
+    assert source == "plan"
+    assert commands == plan.test_commands
+
+
+def test_resolve_test_commands_final_phase_uses_skill():
+    commands, source = resolve_test_commands(
+        _plan(),
+        "gin-gonic/gin",
+        iteration=5,
+        max_fix_iterations=5,
+    )
+    assert source == "merged"
     assert commands == ["go test ./... -count=1"]
 
 

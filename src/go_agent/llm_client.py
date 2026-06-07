@@ -25,7 +25,12 @@ _TRANSPORT: CompletionTransport | None = None
 
 
 def llm_available(settings: Settings) -> bool:
-    return bool(settings.openai_api_key or settings.anthropic_api_key)
+    return bool(
+        settings.openai_api_key
+        or settings.anthropic_api_key
+        or settings.groq_api_key
+        or settings.xai_api_key
+    )
 
 
 def model_for_tier(tier: ModelTier, settings: Settings) -> str:

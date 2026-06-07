@@ -48,6 +48,7 @@ def plan_node(state: AgentState) -> AgentState:
         scope_hints,
         settings,
         logger=logger,
+        repo_path=repo_path_from_state(state),
     )
     write_plan(ctx, fix_plan)
     logger.info(
@@ -150,8 +151,17 @@ def test_node(state: AgentState) -> AgentState:
     plan = plan_from_state(state)
     issue = issue_from_state(state)
 
+    iteration = state.get("iteration", 0)
     try:
-        result = run_tests(repo_path, plan, issue.repo, settings, logger=logger)
+        result = run_tests(
+            repo_path,
+            plan,
+            issue.repo,
+            settings,
+            logger=logger,
+            iteration=iteration,
+            max_fix_iterations=settings.max_fix_iterations,
+        )
     except TestRunError as exc:
         if exc.result is not None:
             write_test_result(ctx, exc.result)

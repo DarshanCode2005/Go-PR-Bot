@@ -11,6 +11,7 @@ from go_agent.fixer import (
     build_corrective_patch,
     build_failure_context,
     build_review_fix_context,
+    expand_fix_files,
     write_fix_meta,
 )
 from go_agent.planner import FixPlan
@@ -147,7 +148,11 @@ def test_build_corrective_patch_with_mock_llm(tmp_path, monkeypatch):
     assert artifact.combined_patch
 
 
-def test_build_corrective_patch_requires_api_key(tmp_path):
+def test_build_corrective_patch_requires_api_key(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    from go_agent.config import clear_settings_cache
+
+    clear_settings_cache()
     repo_path = tmp_path / "repo"
     repo_path.mkdir()
     (repo_path / "README.md").write_text("hello\n", encoding="utf-8")
@@ -161,6 +166,73 @@ def test_build_corrective_patch_requires_api_key(tmp_path):
             FixContext(iteration=1, max_iterations=5, failure_source="test"),
             __import__("go_agent.config", fromlist=["Settings"]).Settings(),
         )
+
+
+def test_expand_fix_files_adds_mentioned_test_file(tmp_path):
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    (repo_path / "baked_in.go").write_text("package validator\n", encoding="utf-8")
+    (repo_path / "validator_test.go").write_text("package validator\n", encoding="utf-8")
+
+    plan = FixPlan(
+        issue_number=1,
+        repo="go-playground/validator",
+        files=["baked_in.go"],
+        steps=["Fix unix_addr"],
+        test_commands=["go test -run TestUnixAddrValidation -count=1"],
+        acceptance_criteria=["Tests pass"],
+    )
+    ctx = FixContext(
+        iteration=1,
+        max_iterations=5,
+        failure_source="test",
+        test_output="--- FAIL: TestUnixAddrValidation (0.00s)\n    validator_test.go:123: assertion failed",
+    )
+    expanded = expand_fix_files(plan, ctx, repo_path)
+    assert "baked_in.go" in expanded
+    assert "validator_test.go" in expanded
+
+
+def test_expand_fix_files_skips_unknown_paths(tmp_path):
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    (repo_path / "main.go").write_text("package main\n", encoding="utf-8")
+
+    plan = _plan()
+    plan = plan.model_copy(update={"files": ["main.go"]})
+    ctx = FixContext(
+        iteration=1,
+        max_iterations=5,
+        failure_source="test",
+        test_output="FAIL: missing.go:10: undefined",
+    )
+    expanded = expand_fix_files(plan, ctx, repo_path)
+    assert expanded == ["main.go"]
+
+
+def test_expand_fix_files_caps_extra_files(tmp_path):
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    for name in ("a.go", "b_test.go", "c_test.go", "d_test.go"):
+        (repo_path / name).write_text("package p\n", encoding="utf-8")
+
+    plan = FixPlan(
+        issue_number=1,
+        repo="example/repo",
+        files=["a.go"],
+        steps=["fix"],
+        test_commands=["go test ./... -count=1"],
+        acceptance_criteria=["pass"],
+    )
+    ctx = FixContext(
+        iteration=1,
+        max_iterations=5,
+        failure_source="test",
+        test_output="FAIL b_test.go c_test.go d_test.go",
+    )
+    expanded = expand_fix_files(plan, ctx, repo_path, max_extra=2)
+    assert len(expanded) == 3
+    assert expanded[0] == "a.go"
 
 
 def test_write_fix_meta_artifact(tmp_path, monkeypatch):
