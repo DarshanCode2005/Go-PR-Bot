@@ -181,9 +181,32 @@ def _issue_implies_behavior_change(issue: IssueContext) -> bool:
     return bool(_BEHAVIOR_CHANGE_RE.search(text))
 
 
+def _test_file_text_from_hits(
+    path: str,
+    search_hits: list[SearchHit],
+    *,
+    repo_path: Path | None,
+) -> str:
+    norm = normalize_file_path(path)
+    if repo_path is not None:
+        file_path = repo_path / path
+        if file_path.is_file():
+            try:
+                return file_path.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                pass
+    return "\n".join(
+        hit.line_text
+        for hit in search_hits
+        if normalize_file_path(hit.path) == norm
+    )
+
+
 def _extract_known_tests(
     context_bundle: ContextBundle,
     search_hits: list[SearchHit] | None = None,
+    *,
+    repo_path: Path | None = None,
 ) -> list[tuple[str, str]]:
     """Return (test_name, file_path) pairs found in bundle snippets or search hits."""
     seen: set[tuple[str, str]] = set()
@@ -203,11 +226,15 @@ def _extract_known_tests(
             bundle_has_test_file = True
 
     if not bundle_has_test_file and search_hits:
-        for hit in search_hits:
-            if not normalize_file_path(hit.path).endswith("_test.go"):
-                continue
-            for match in _TEST_FUNC_RE.finditer(hit.line_text):
-                add(match.group(1), hit.path)
+        test_paths = {
+            hit.path
+            for hit in search_hits
+            if normalize_file_path(hit.path).endswith("_test.go")
+        }
+        for path in sorted(test_paths):
+            text = _test_file_text_from_hits(path, search_hits, repo_path=repo_path)
+            for match in _TEST_FUNC_RE.finditer(text):
+                add(match.group(1), path)
 
     return ordered
 
@@ -215,8 +242,10 @@ def _extract_known_tests(
 def _format_known_tests_section(
     context_bundle: ContextBundle,
     search_hits: list[SearchHit] | None = None,
+    *,
+    repo_path: Path | None = None,
 ) -> str | None:
-    known = _extract_known_tests(context_bundle, search_hits)
+    known = _extract_known_tests(context_bundle, search_hits, repo_path=repo_path)
     if not known:
         return None
     lines = ["Known tests in context:"]
@@ -238,13 +267,14 @@ def _validate_test_awareness(
     *,
     context_bundle: ContextBundle | None = None,
     search_hits: list[SearchHit] | None = None,
+    repo_path: Path | None = None,
 ) -> None:
     if not _issue_implies_behavior_change(issue):
         return
     if _plan_has_test_awareness(payload):
         return
     known = (
-        _extract_known_tests(context_bundle, search_hits)
+        _extract_known_tests(context_bundle, search_hits, repo_path=repo_path)
         if context_bundle is not None
         else []
     )
@@ -278,8 +308,10 @@ def _build_test_awareness_correction(
     error: PlanError,
     context_bundle: ContextBundle,
     search_hits: list[SearchHit] | None,
+    *,
+    repo_path: Path | None = None,
 ) -> str:
-    known = _extract_known_tests(context_bundle, search_hits)
+    known = _extract_known_tests(context_bundle, search_hits, repo_path=repo_path)
     known_lines = "\n".join(f"- {name} ({path})" for name, path in known)
     known_block = f"\nKnown tests in context:\n{known_lines}" if known_lines else ""
     return (
@@ -301,6 +333,7 @@ def build_planner_messages(
     max_context_chars: int = _DEFAULT_MAX_CONTEXT_CHARS,
     correction: str | None = None,
     search_hits: list[SearchHit] | None = None,
+    repo_path: Path | None = None,
 ) -> list[dict[str, str]]:
     """Build system + user messages for the planner LLM call."""
     skill_section = format_skill_prompt(issue.repo, stage="planner")
@@ -315,7 +348,9 @@ def build_planner_messages(
         f"Scope hints: {hints_text}",
         f"Context bundle ({len(context_bundle.files)} files):\n{bundle_text or '(empty)'}",
     ]
-    known_tests = _format_known_tests_section(context_bundle, search_hits)
+    known_tests = _format_known_tests_section(
+        context_bundle, search_hits, repo_path=repo_path
+    )
     if known_tests:
         user_parts.append(known_tests)
     if skill_section:
@@ -445,6 +480,7 @@ def _request_plan(
         issue,
         context_bundle=context_bundle,
         search_hits=search_hits,
+        repo_path=repo_path,
     )
     if context_bundle is not None:
         payload = enrich_fix_plan_payload(
@@ -475,6 +511,7 @@ def build_fix_plan(
         context_bundle,
         scope_hints,
         search_hits=search_hits,
+        repo_path=repo_path,
     )
     try:
         plan = _request_plan(
@@ -498,6 +535,7 @@ def build_fix_plan(
                 first_error,
                 context_bundle,
                 search_hits,
+                repo_path=repo_path,
             )
         else:
             correction = (
@@ -511,6 +549,7 @@ def build_fix_plan(
             scope_hints,
             correction=correction,
             search_hits=search_hits,
+            repo_path=repo_path,
         )
         try:
             plan = _request_plan(

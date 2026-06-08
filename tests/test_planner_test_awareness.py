@@ -140,6 +140,42 @@ def test_extract_known_tests_from_search_hits():
     assert known == [("TestUnixAddrValidation", "validator_test.go")]
 
 
+def test_extract_known_tests_from_search_hits_reads_test_file(tmp_path):
+    bundle = ContextBundle(
+        issue_number=1348,
+        repo="go-playground/validator",
+        budget_chars=80000,
+        total_chars=20,
+        files=[
+            ContextFileEntry(
+                path="baked_in.go",
+                rationale="validation tag",
+                graph_distance=0,
+                content_tier="snippet",
+                content="func isUnixAddr() {}",
+                char_count=20,
+            ),
+        ],
+    )
+    test_path = tmp_path / "validator_test.go"
+    test_path.write_text(
+        "func TestUnixAddrValidation(t *testing.T) {\n"
+        '    assert.True(t, validate("unix_addr", ""))\n'
+        "}\n",
+        encoding="utf-8",
+    )
+    hits = [
+        SearchHit(
+            path="validator_test.go",
+            line_number=2,
+            line_text='    assert.True(t, validate("unix_addr", ""))',
+            query="unix_addr",
+        ),
+    ]
+    known = _extract_known_tests(bundle, hits, repo_path=tmp_path)
+    assert known == [("TestUnixAddrValidation", "validator_test.go")]
+
+
 def test_validate_test_awareness_rejects_narrow_plan():
     payload = {
         "files": ["baked_in.go"],
