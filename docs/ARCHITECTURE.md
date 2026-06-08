@@ -44,12 +44,12 @@ flowchart TB
 
 ## Roadmap
 
-The LangGraph pipeline above is the stable core. Planned enhancements (test-aware planning, fix-scope expansion, review on failure, harness observability) are tracked in [FEATURE_MAP.md](FEATURE_MAP.md) with status, priority, and GitHub issue links. Update the MAP when a feature ships.
+The LangGraph pipeline above is the stable core. Shipped P0 enhancements include test-aware planning (`planner.py` validation + retry, `skills/_default/test-awareness.md`), failure-driven fix-scope expansion, and scoped `go test -run` verification. Remaining work (review on failure, harness observability) is tracked in [FEATURE_MAP.md](FEATURE_MAP.md) with status, priority, and GitHub issue links. Update the MAP when a feature ships.
 
 ```mermaid
 flowchart LR
   subgraph p0 [P0 pipeline]
-    plan2[test-aware plan]
+    plan2["test-aware plan (shipped)"]
     fix2[scope expand + context refresh]
     test2[scoped go test]
     review2[review on failure]

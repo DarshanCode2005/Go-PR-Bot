@@ -112,9 +112,21 @@ A new run might plan both `baked_in.go` and `validator_test.go`. Scoped test com
 
 For a dry-run demo, the trace is already complete: plan, coder, integrator, five fix loops, PR draft. Calling out that `TestUnixAddrValidation` needs an empty-string guard is a fair evaluation write-up.
 
+## After test-aware planning (PR #92)
+
+The `f3934252…` sample above documents the **pre-fix** failure mode. Test-aware planning (MAP-P0-001, [#77](https://github.com/DarshanCode2005/Go-PR-Bot/issues/77)) now addresses the root cause:
+
+- **Behavior-change heuristic:** Issues whose title/body mention validation, bugs, failures, or edge cases trigger `_validate_test_awareness()` in `planner.py`.
+- **Plan gate:** Plans must include at least one `*_test.go` in `files` **or** a `Test*` name in `acceptance_criteria`. Narrow single-file plans (like the sample `plan.json` with only `baked_in.go` and generic "Tests pass" criteria) are rejected and retried once with a corrective prompt.
+- **Known tests in prompt:** Test function names extracted from the context bundle (and `search_hits.json` when the bundle lacks test files) are injected as `Known tests in context:` before the LLM call.
+- **Skill guidance:** `skills/_default/test-awareness.md` is loaded for the planner stage via `skills.py`.
+- **Safety net:** `enrich_fix_plan_payload()` auto-appends sibling `*_test.go` files from the bundle after validation passes.
+
+A re-run of validator#1348 should produce a plan that lists `validator_test.go` and/or references `TestUnixAddrValidation` in steps or acceptance criteria. End-to-end green tests for this issue remain tracked under MAP-P0-009 ([#79](https://github.com/DarshanCode2005/Go-PR-Bot/issues/79)).
+
 ## Takeaways for reviewers
 
 1. **Infrastructure:** The closed loop, integrator, and fixer retries behaved as designed.
 2. **Semantic gaps:** When validation changes edge-case behavior, fixes need to account for what the tests expect, not just the implementation change.
-3. **Plan scope:** A one-file plan is harder to finish when the issue spans both code and test expectations, especially with a small iteration budget.
+3. **Plan scope:** A one-file plan is harder to finish when the issue spans both code and test expectations, especially with a small iteration budget. Test-aware planning (PR #92) now prevents this at plan time.
 4. **Model and iteration budget:** Smaller fast models on tricky OSS issues may need more fix iterations or a stronger tier.
