@@ -84,6 +84,8 @@ def test_build_planner_messages_includes_skill():
     assert "Repo skill notes:" in user
     assert _GIN_MARKER in user
     assert "test_commands:" not in user
+    assert "Stage skill notes:" in user
+    assert "Read failing or related" in user
 
 
 def test_build_planner_messages_unknown_repo_uses_default():

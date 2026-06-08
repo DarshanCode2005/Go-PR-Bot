@@ -13,8 +13,12 @@ if TYPE_CHECKING:
     from go_agent.planner import FixPlan
 
 _SKILLS_ROOT = Path(__file__).resolve().parents[2] / "skills"
+_DEFAULT_SKILLS_DIR = _SKILLS_ROOT / "_default"
 _BASH_BLOCK = re.compile(r"```bash\s*\n(.*?)```", re.DOTALL | re.IGNORECASE)
 _GO_TEST_LINE = re.compile(r"^\s*(go test\s+.+)$", re.MULTILINE)
+_SUPPLEMENTARY_SKILLS: dict[str, list[str]] = {
+    "planner": ["test-awareness.md"],
+}
 
 
 def _split_inline_bracket_list(inline: str) -> list[str]:
@@ -71,14 +75,41 @@ def skill_body_for_prompt(skill_text: str) -> str:
     return skill_text.strip()
 
 
-def format_skill_prompt(repo: str, *, max_chars: int | None = None) -> str | None:
+def load_supplementary_skills(stage: str) -> str:
+    """Load supplementary skill markdown for a pipeline stage."""
+    filenames = _SUPPLEMENTARY_SKILLS.get(stage, [])
+    parts: list[str] = []
+    for filename in filenames:
+        path = _DEFAULT_SKILLS_DIR / filename
+        if not path.is_file():
+            continue
+        body = skill_body_for_prompt(path.read_text(encoding="utf-8"))
+        if body:
+            parts.append(body)
+    return "\n\n".join(parts)
+
+
+def format_skill_prompt(
+    repo: str,
+    *,
+    max_chars: int | None = None,
+    stage: str | None = None,
+) -> str | None:
     """Format repo skill notes for injection into agent prompts."""
-    body = skill_body_for_prompt(load_skill_text(repo))
-    if not body:
+    sections: list[str] = []
+    repo_body = skill_body_for_prompt(load_skill_text(repo))
+    if repo_body:
+        sections.append(f"Repo skill notes:\n{repo_body}")
+    if stage:
+        stage_body = load_supplementary_skills(stage)
+        if stage_body:
+            sections.append(f"Stage skill notes:\n{stage_body}")
+    if not sections:
         return None
+    combined = "\n\n".join(sections)
     if max_chars is not None:
-        body = body[:max_chars]
-    return f"Repo skill notes:\n{body}"
+        combined = combined[:max_chars]
+    return combined
 
 
 def _parse_frontmatter_list_commands(skill_text: str, key: str) -> list[str] | None:

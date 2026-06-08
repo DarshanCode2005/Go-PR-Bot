@@ -36,7 +36,7 @@ from go_agent.orchestrator.runtime import (
 )
 from go_agent.orchestrator.state import AgentState, LintResult, TestResult
 from go_agent.patches import apply_patch_and_commit
-from go_agent.planner import build_fix_plan, write_plan
+from go_agent.planner import build_fix_plan, load_search_hits_from_artifact, write_plan
 from go_agent.reviewer import ReviewError, ReviewResult, build_review, write_review
 from go_agent.test_runner import TestRunError, combined_output, run_tests, write_test_result
 
@@ -48,6 +48,7 @@ def plan_node(state: AgentState) -> AgentState:
     issue = issue_from_state(state)
     bundle = bundle_from_state(state)
     scope_hints = state.get("scope_hints") or []
+    search_hits = load_search_hits_from_artifact(ctx.artifact_dir)
 
     fix_plan = build_fix_plan(
         issue,
@@ -56,6 +57,7 @@ def plan_node(state: AgentState) -> AgentState:
         settings,
         logger=logger,
         repo_path=repo_path_from_state(state),
+        search_hits=search_hits or None,
     )
     write_plan(ctx, fix_plan)
     logger.info(
