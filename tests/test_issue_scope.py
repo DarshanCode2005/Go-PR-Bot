@@ -55,6 +55,23 @@ def test_cobra_flags_fixture():
     _assert_contains(hints, "cmd")
 
 
+def test_extract_scope_hints_strips_clone_folder_prefix():
+    issue = IssueContext(
+        repo="go-playground/validator",
+        number=1561,
+        title="hostname bug",
+        body=(
+            "FAIL\tvalidator-master/validator_test.go:10679: Hostname failed\n"
+            "edit validator-master/baked_in.go\n"
+        ),
+        state="open",
+    )
+    hints = extract_scope_hints(issue)
+    assert "validator-master/validator_test.go" not in hints
+    assert "validator_test.go" in hints
+    assert "baked_in.go" in hints
+
+
 def test_validator_error_fixture():
     hints = extract_scope_hints(_issue_from_fixture("validator_error.md"))
     _assert_contains(hints, "validator.go")

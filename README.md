@@ -20,7 +20,7 @@ Only these four targets are allowed. Each has a repo skill under `skills/`; unkn
 - **`gh` CLI** for issue fetch and optional PR creation (`gh auth login` or `GITHUB_TOKEN`)
 - **`git`** and **`rg`** (ripgrep) on your PATH
 - **Optional:** `golangci-lint` when the repo skill or default lint path runs it
-- **LLM API key:** at least one of `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` (planner, coder, and reviewer require an LLM)
+- **LLM API key:** at least one provider key (OpenAI, Anthropic, Groq, xAI, Gemini, or Nvidia NIM); planner, coder, and reviewer require an LLM
 
 ## Setup
 
@@ -50,6 +50,13 @@ All settings load from environment variables (with optional `.env`). Variables p
 |----------|----------|---------|---------|
 | `OPENAI_API_KEY` | One LLM key | (none) | OpenAI via LiteLLM |
 | `ANTHROPIC_API_KEY` | One LLM key | (none) | Anthropic via LiteLLM |
+| `GROQ_API_KEY` | One LLM key | (none) | Groq via LiteLLM |
+| `XAI_API_KEY` | One LLM key | (none) | xAI via LiteLLM |
+| `GEMINI_API_KEY` | One LLM key | (none) | Google Gemini via LiteLLM |
+| `NVIDIA_NIM_API_KEY` | One LLM key | (none) | [Nvidia NIM](https://build.nvidia.com) via LiteLLM (`nvidia_nim/` model prefix) |
+| `NVIDIA_NIM_API_BASE` | No | `https://integrate.api.nvidia.com/v1` | Override NIM API base URL (no trailing slash) |
+
+NIM model IDs use the catalog name with dashes, e.g. `nvidia_nim/meta/llama-3.1-8b-instruct` (not `llama3-8b`). List IDs with `GET https://integrate.api.nvidia.com/v1/models`.
 | `GO_AGENT_MODEL_FAST` | No | `gpt-4o-mini` | Coder, fixer, scope hints, PR draft |
 | `GO_AGENT_MODEL_STRONG` | No | `gpt-4o` | Planner and reviewer |
 | `GO_AGENT_LLM_MAX_RETRIES` | No | `3` | Retries on rate limits |
@@ -183,9 +190,6 @@ flowchart LR
 
 **Full design:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 
-## Roadmap
-
-Planned improvements, current status, and linked issues: [docs/FEATURE_MAP.md](docs/FEATURE_MAP.md).
 
 ## Evaluation
 

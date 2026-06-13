@@ -18,9 +18,12 @@ from go_agent.coder import (
     build_proposed_patch,
     collect_coder_anchors,
     extract_paths_from_unified_diff,
+    file_needs_coder_patch,
     generate_file_patch,
+    is_invalid_go_patch_snippet,
     normalize_llm_patch,
     parse_search_replace_blocks,
+    plan_slice_for_file,
     sanitize_llm_patch_output,
     schedule_coder_waves,
     slice_file_for_coder_prompt,
@@ -114,6 +117,92 @@ def _fixture_bundle() -> ContextBundle:
     )
 
 
+def test_file_needs_coder_patch_skips_unrelated_test_files():
+    plan = FixPlan(
+        issue_number=1348,
+        repo="go-playground/validator",
+        files=["baked_in.go", "validator_test.go", "benchmarks_test.go"],
+        steps=[
+            "Fix unix_addr in baked_in.go",
+            "Add a test case in validator_test.go",
+        ],
+        test_commands=["go test -run TestUnixAddrValidation -count=1"],
+        acceptance_criteria=["TestUnixAddrValidation passes"],
+    )
+    bundle = ContextBundle(
+        issue_number=1348,
+        repo="go-playground/validator",
+        budget_chars=80000,
+        total_chars=80,
+        files=[
+            ContextFileEntry(
+                path="validator_test.go",
+                content_tier="snippet",
+                content="func TestUnixAddrValidation(t *testing.T) {}",
+                rationale="regression",
+                graph_distance=0,
+                char_count=40,
+            ),
+            ContextFileEntry(
+                path="benchmarks_test.go",
+                content_tier="snippet",
+                content="func BenchmarkValidate(b *testing.B) {}",
+                rationale="benchmarks",
+                graph_distance=1,
+                char_count=35,
+            ),
+        ],
+    )
+    assert file_needs_coder_patch(plan, "baked_in.go", bundle) is True
+    assert file_needs_coder_patch(plan, "validator_test.go", bundle) is False
+    assert file_needs_coder_patch(plan, "benchmarks_test.go", bundle) is False
+
+
+def test_file_needs_coder_patch_patches_test_when_steps_update_expectations():
+    plan = FixPlan(
+        issue_number=1,
+        repo="example/foo",
+        files=["pkg/foo.go", "pkg/foo_test.go"],
+        steps=[
+            "Fix Foo in pkg/foo.go",
+            "Update test expectations in pkg/foo_test.go for new return type",
+        ],
+        test_commands=["go test ./pkg -count=1"],
+        acceptance_criteria=["Tests pass"],
+    )
+    assert file_needs_coder_patch(plan, "pkg/foo_test.go", None) is True
+
+
+def test_file_needs_coder_patch_patches_test_only_plan():
+    plan = FixPlan(
+        issue_number=1,
+        repo="example/foo",
+        files=["pkg/foo_test.go"],
+        steps=["Add table-driven cases to pkg/foo_test.go"],
+        test_commands=["go test ./pkg -count=1"],
+        acceptance_criteria=["Tests pass"],
+    )
+    assert file_needs_coder_patch(plan, "pkg/foo_test.go", None) is True
+
+
+def test_plan_slice_for_file_filters_steps_to_target_test_file():
+    plan = FixPlan(
+        issue_number=1348,
+        repo="go-playground/validator",
+        files=["baked_in.go", "validator_test.go"],
+        steps=[
+            "Fix unix_addr in baked_in.go",
+            "Add a test case in validator_test.go",
+        ],
+        test_commands=["go test -count=1"],
+        acceptance_criteria=["TestUnixAddrValidation passes"],
+    )
+    prod_slice = plan_slice_for_file(plan, "baked_in.go")
+    test_slice = plan_slice_for_file(plan, "validator_test.go")
+    assert any("baked_in.go" in step for step in prod_slice.steps)
+    assert all("validator_test.go" in step for step in test_slice.steps)
+
+
 def test_parse_search_replace_blocks():
     text = (
         "--- SEARCH\n"
@@ -134,6 +223,70 @@ def test_apply_search_replace_updates_content():
     blocks = parse_search_replace_blocks(MOCK_FOO_SR)
     updated = apply_search_replace_blocks(FOO_GO, blocks)
     assert updated == FOO_GO_PATCHED
+
+
+def test_is_invalid_go_patch_snippet_detects_hallucinations():
+    corrupt = (
+        "func isUnixAddrResolvable(fl FieldLevel) bool {\n"
+        "\treturn false\n"
+        "}\n\n"
+        "package validator\n\n"
+        "import (\n"
+        '\t"os"\n'
+        ")\n"
+    )
+    assert is_invalid_go_patch_snippet(corrupt)
+    assert is_invalid_go_patch_snippet("func Foo() {}\n\n// ... [lines 10-20 of 100] ...")
+    assert is_invalid_go_patch_snippet("func Foo() {\n\t// ... (rest of the function remains the same)\n}")
+    assert not is_invalid_go_patch_snippet("package validator\n\nimport (\n\t\"os\"\n)")
+    assert not is_invalid_go_patch_snippet("func Foo() int { return 1 }")
+
+
+def test_apply_search_replace_rejects_midfile_package_in_replace():
+    llm_output = (
+        "--- SEARCH\n"
+        "func Foo() {}\n"
+        "+++ REPLACE\n"
+        "func Foo() {}\n\n"
+        "package validator\n"
+    )
+    blocks = parse_search_replace_blocks(llm_output)
+    with pytest.raises(CoderError, match="invalid Go"):
+        apply_search_replace_blocks(FOO_GO, blocks)
+
+
+def test_apply_search_replace_falls_back_to_function_name(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    original = (
+        "// isUnixAddrResolvable validates unix addresses.\n"
+        "func isUnixAddrResolvable(fl FieldLevel) bool {\n"
+        '\t_, err := net.ResolveUnixAddr("unix", fl.Field().String())\n'
+        "\n"
+        "\treturn err == nil\n"
+        "}\n"
+    )
+    llm_output = (
+        "--- SEARCH\n"
+        "func isUnixAddrResolvable(fl FieldLevel) bool {\n"
+        "\treturn false\n"
+        "}\n"
+        "+++ REPLACE\n"
+        "// isUnixAddrResolvable validates unix addresses.\n"
+        "func isUnixAddrResolvable(fl FieldLevel) bool {\n"
+        '\taddr := fl.Field().String()\n'
+        '\tif addr == "" {\n'
+        "\t\treturn true\n"
+        "\t}\n"
+        '\t_, err := net.ResolveUnixAddr("unix", addr)\n'
+        "\n"
+        "\treturn err == nil\n"
+        "}\n"
+    )
+    blocks = parse_search_replace_blocks(llm_output)
+    updated = apply_search_replace_blocks(original, blocks)
+    assert 'if addr == ""' in updated
+    assert "return false" not in updated
 
 
 def test_unified_diff_extract_paths():

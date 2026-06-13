@@ -21,25 +21,25 @@ from go_agent.planner import FixPlan
 from go_agent.run_context import create_run_context
 from helpers import run_git
 
-FOO_GO = "package pkg\n\nfunc Foo() { return 1 }\n"
-BAR_GO = "package pkg\n\nfunc Bar() {}\n"
+FOO_GO = "package pkg\n\nfunc Foo() int { return 1 }\n"
+BAR_GO = "package pkg\n\nfunc Bar() int { return 0 }\n"
 
 PATCH_A_SR = """--- SEARCH
-func Foo() { return 1 }
+func Foo() int { return 1 }
 +++ REPLACE
-func Foo() { return 2 }
+func Foo() int { return 2 }
 """
 
 PATCH_B_SR = """--- SEARCH
-func Foo() { return 1 }
+func Foo() int { return 1 }
 +++ REPLACE
-func Foo() { return 3 }
+func Foo() int { return 3 }
 """
 
 MERGED_SR = """--- SEARCH
-func Foo() { return 1 }
+func Foo() int { return 1 }
 +++ REPLACE
-func Foo() { return 23 }
+func Foo() int { return 23 }
 """
 
 
@@ -139,7 +139,7 @@ def test_integrate_applies_disjoint_files_in_order(tmp_path):
     bar_patch = normalize_llm_patch(
         "pkg/bar.go",
         BAR_GO,
-        "--- SEARCH\nfunc Bar() {}\n+++ REPLACE\nfunc Bar() { return 1 }\n",
+        "--- SEARCH\nfunc Bar() int { return 0 }\n+++ REPLACE\nfunc Bar() int { return 1 }\n",
         _plan(["pkg/foo.go", "pkg/bar.go"]),
     )
     foo_patch = _file_patch("pkg/foo.go", FOO_GO, PATCH_A_SR)
@@ -183,7 +183,7 @@ def test_integrate_overlapping_hunks_merge(tmp_path, monkeypatch):
     assert len(result.conflicts) == 1
     assert result.conflicts[0].path == "pkg/foo.go"
     assert result.conflicts[0].patch_count == 2
-    assert "+func Foo() { return 23 }" in result.resolved_patch
+    assert "+func Foo() int { return 23 }" in result.resolved_patch
     check = subprocess.run(
         ["git", "apply", "--check"],
         cwd=repo,
@@ -219,7 +219,7 @@ def test_integrate_resets_worktree_when_merged_patch_fails(tmp_path, monkeypatch
     bar_patch = normalize_llm_patch(
         "pkg/bar.go",
         BAR_GO,
-        "--- SEARCH\nfunc Bar() {}\n+++ REPLACE\nfunc Bar() { return 1 }\n",
+        "--- SEARCH\nfunc Bar() int { return 0 }\n+++ REPLACE\nfunc Bar() int { return 1 }\n",
         plan,
     )
     patch_a = _file_patch("pkg/foo.go", FOO_GO, PATCH_A_SR)

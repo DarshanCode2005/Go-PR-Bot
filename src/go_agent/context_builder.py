@@ -13,7 +13,7 @@ from go_agent.config import Settings
 from go_agent.context_ranker import RankedFile, rank_files
 from go_agent.github_issues import IssueContext
 from go_agent.issue_scope import build_scope_hints
-from go_agent.llm_client import complete
+from go_agent.llm_client import complete, llm_available
 from go_agent.repo_search import (
     RipgrepError,
     RipgrepNotFoundError,
@@ -176,13 +176,7 @@ def _initial_tier(index: int, settings: Settings) -> ContentTier:
     if index < settings.context_full_file_top_k:
         return "full"
     if index < settings.context_full_file_top_k + settings.context_summary_top_k:
-        if (
-            settings.openai_api_key
-            or settings.anthropic_api_key
-            or settings.groq_api_key
-            or settings.xai_api_key
-            or settings.gemini_api_key
-        ):
+        if llm_available(settings):
             return "summary"
         return "snippet"
     return "snippet"

@@ -8,6 +8,7 @@ import shutil
 import pytest
 
 from go_agent.config import Settings, clear_settings_cache
+from go_agent.failure_parse import is_compile_failure
 from go_agent.fixer import (
     FixContext,
     FixScopeExpansion,
@@ -29,6 +30,13 @@ SAMPLE_TEST_OUTPUT = (
     "Error:Field validation for '' failed on the 'unix_addr' tag\n"
     "FAIL\n"
     "FAIL\tgithub.com/go-playground/validator/v10\t0.163s\n"
+)
+
+COMPILE_FAIL_OUTPUT = (
+    "FAIL\tgithub.com/go-playground/validator/v10 [setup failed]\n"
+    "# github.com/go-playground/validator/v10\n"
+    "./baked_in.go:1715:1: syntax error: non-declaration statement outside function body\n"
+    "validator_test.go:3225:1: expected declaration, found '}'\n"
 )
 
 
@@ -62,7 +70,36 @@ def test_resolve_test_files_finds_definition(tmp_path):
     assert resolved == ["foo_test.go"]
 
 
-@pytest.mark.skipif(shutil.which("rg") is None, reason="ripgrep required")
+def test_is_compile_failure_detects_syntax_errors():
+    assert is_compile_failure(COMPILE_FAIL_OUTPUT)
+    assert not is_compile_failure(SAMPLE_TEST_OUTPUT)
+
+
+def test_expand_compile_failure_limits_scope_to_production_files(tmp_path):
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    (repo_path / "baked_in.go").write_text("package validator\n", encoding="utf-8")
+    (repo_path / "validator_test.go").write_text("package validator\n", encoding="utf-8")
+
+    plan = FixPlan(
+        issue_number=1348,
+        repo="go-playground/validator",
+        files=["baked_in.go", "validator_test.go"],
+        steps=["fix"],
+        test_commands=["go test -count=1 ./..."],
+        acceptance_criteria=["pass"],
+    )
+    ctx = FixContext(
+        iteration=1,
+        max_iterations=5,
+        failure_source="test",
+        test_output=COMPILE_FAIL_OUTPUT,
+    )
+    expansion = expand_fix_files(plan, ctx, repo_path, Settings())
+    assert expansion.target_files == ["baked_in.go"]
+    assert "validator_test.go" not in expansion.target_files
+
+
 def test_expand_includes_ripgrep_resolved_test_file(tmp_path):
     repo_path = tmp_path / "repo"
     repo_path.mkdir()

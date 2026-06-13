@@ -13,7 +13,14 @@ from go_agent.config import Settings, clear_settings_cache
 from go_agent.context_builder import ContextBundle, ContextFileEntry
 from go_agent.github_issues import IssueContext
 from go_agent.llm_client import set_completion_transport
-from go_agent.planner import FixPlan, PlanError, build_fix_plan, enrich_fix_plan_payload, write_plan
+from go_agent.planner import (
+    FixPlan,
+    PlanError,
+    build_fix_plan,
+    enrich_fix_plan_payload,
+    sanitize_plan_file_paths,
+    write_plan,
+)
 from go_agent.run_context import create_run_context
 
 VALID_PLAN_JSON = (
@@ -120,6 +127,7 @@ def test_build_fix_plan_requires_api_key():
         groq_api_key=None,
         gemini_api_key=None,
         xai_api_key=None,
+        nvidia_nim_api_key=None,
     )
     with pytest.raises(PlanError, match="API key"):
         build_fix_plan(issue, bundle, ["BindJSON"], settings)
@@ -245,6 +253,51 @@ def test_enrich_fix_plan_payload_strips_unknown_dependencies():
     assert plan.file_dependencies == {}
 
 
+def test_enrich_does_not_add_unrelated_bundle_test_files():
+    bundle = ContextBundle(
+        issue_number=1348,
+        repo="go-playground/validator",
+        budget_chars=80000,
+        total_chars=200,
+        files=[
+            ContextFileEntry(
+                path="baked_in.go",
+                rationale="validation tag",
+                graph_distance=0,
+                content_tier="snippet",
+                content="func isUnixAddrResolvable() {}",
+                char_count=20,
+            ),
+            ContextFileEntry(
+                path="validator_test.go",
+                rationale="regression test",
+                graph_distance=1,
+                content_tier="snippet",
+                content="func TestUnixAddrValidation(t *testing.T) {}",
+                char_count=40,
+            ),
+            ContextFileEntry(
+                path="benchmarks_test.go",
+                rationale="benchmarks",
+                graph_distance=2,
+                content_tier="snippet",
+                content="func BenchmarkValidate(b *testing.B) {}",
+                char_count=40,
+            ),
+        ],
+    )
+    payload = enrich_fix_plan_payload(
+        {
+            "files": ["baked_in.go"],
+            "steps": ["Fix unix_addr in baked_in.go", "Read validator_test.go expectations"],
+            "test_commands": ["go test -run TestUnixAddrValidation -count=1"],
+            "acceptance_criteria": ["TestUnixAddrValidation passes"],
+        },
+        context_bundle=bundle,
+    )
+    assert payload["files"] == ["baked_in.go", "validator_test.go"]
+
+
 def test_enrich_fix_plan_payload_adds_test_file_from_bundle():
     bundle = ContextBundle(
         issue_number=32,
@@ -280,6 +333,67 @@ def test_enrich_fix_plan_payload_adds_test_file_from_bundle():
         context_bundle=bundle,
     )
     assert payload["files"] == ["baked_in.go", "validator_test.go"]
+
+
+def test_sanitize_plan_file_paths_strips_clone_folder_prefix(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "baked_in.go").write_text("package validator\n", encoding="utf-8")
+    bundle = ContextBundle(
+        issue_number=1561,
+        repo="go-playground/validator",
+        files=[
+            ContextFileEntry(
+                path="baked_in.go",
+                rationale="hit",
+                graph_distance=0,
+                content_tier="snippet",
+                content='"hostname_rfc1123": isHostnameRFC1123,',
+                char_count=40,
+            ),
+        ],
+        budget_chars=80000,
+        total_chars=40,
+    )
+    resolved = sanitize_plan_file_paths(
+        ["validator-master/hostname.go"],
+        repo_path=repo,
+        context_bundle=bundle,
+    )
+    assert resolved == []
+
+
+def test_enrich_fix_plan_payload_remaps_hallucinated_clone_paths(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "baked_in.go").write_text("package validator\n", encoding="utf-8")
+    bundle = ContextBundle(
+        issue_number=1561,
+        repo="go-playground/validator",
+        files=[
+            ContextFileEntry(
+                path="baked_in.go",
+                rationale="hit",
+                graph_distance=0,
+                content_tier="snippet",
+                content='"hostname_rfc1123": isHostnameRFC1123,',
+                char_count=40,
+            ),
+        ],
+        budget_chars=80000,
+        total_chars=40,
+    )
+    payload = enrich_fix_plan_payload(
+        {
+            "files": ["validator-master/hostname.go"],
+            "steps": ["Update hostname_rfc1123 validation logic"],
+            "test_commands": ["go test -run TestHostnameRFC1123Validation -count=1"],
+            "acceptance_criteria": ["TestHostnameRFC1123Validation passes"],
+        },
+        context_bundle=bundle,
+        repo_path=repo,
+    )
+    assert payload["files"] == ["baked_in.go"]
 
 
 def test_build_fix_plan_sanitizes_invalid_dependencies_without_retry(monkeypatch):

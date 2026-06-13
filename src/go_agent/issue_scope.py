@@ -5,9 +5,12 @@ from __future__ import annotations
 import json
 import re
 
+from pathlib import Path
+
 from go_agent.config import Settings
 from go_agent.github_issues import IssueContext
 from go_agent.llm_client import complete
+from go_agent.utils import normalize_file_path
 
 MAX_SCOPE_HINTS = 50
 
@@ -27,6 +30,17 @@ def _issue_text(issue: IssueContext) -> str:
     return "\n".join(part for part in parts if part)
 
 
+def _strip_clone_folder_prefix(path: str) -> str:
+    """Drop archive/clone folder prefixes from issue paste paths (validator-master/foo.go)."""
+    norm = normalize_file_path(path)
+    parts = Path(norm).parts
+    if len(parts) < 2:
+        return norm
+    if parts[0].endswith("-master") or parts[0] in {"validator", "gin", "cobra"}:
+        return normalize_file_path(str(Path(*parts[1:])))
+    return norm
+
+
 def _normalize_hint(raw: str) -> str | None:
     hint = raw.strip().strip(".,;:")
     if len(hint) < 2:
@@ -35,6 +49,8 @@ def _normalize_hint(raw: str) -> str | None:
         return None
     if hint.startswith("http://") or hint.startswith("https://"):
         return None
+    if hint.endswith(".go") and "/" in hint:
+        hint = _strip_clone_folder_prefix(hint)
     return hint
 
 

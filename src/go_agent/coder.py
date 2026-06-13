@@ -16,7 +16,7 @@ from go_agent.config import Settings
 from go_agent.context_builder import ContextBundle, ContextFileEntry
 from go_agent.github_issues import IssueContext
 from go_agent.llm_client import complete, llm_available
-from go_agent.planner import FixPlan
+from go_agent.planner import FixPlan, plan_narrative_text, test_file_relevant_for_enrichment
 from go_agent.skills import format_skill_prompt
 from go_agent.utils import normalize_file_path
 from go_agent.run_context import RunContext
@@ -25,6 +25,11 @@ _DIFF_GIT = re.compile(r"^diff --git a/(.+?) b/", re.MULTILINE)
 _RUN_TEST_RE = re.compile(r"-run\s+(\S+)")
 _BACKTICK_RE = re.compile(r"`([^`]+)`")
 _PLAN_IDENT_RE = re.compile(r"\b(?:Test[A-Z]\w*|is[A-Z]\w*)\b")
+_EDIT_EXISTING_TEST_RE = re.compile(
+    r"\b(update|change|fix|modify|adjust|correct|rewrite)\b.{0,40}\b(tests?|expectations?)\b|"
+    r"\b(tests?|expectations?)\b.{0,40}\b(update|change|fix|modify|adjust|correct|rewrite)\b",
+    re.I,
+)
 _READ_FILE_MAX_CHARS = 2_000_000
 CODER_SYSTEM_PROMPT = """You are a Go coder agent editing exactly one file for a GitHub issue fix.
 
@@ -39,7 +44,9 @@ Output either:
 Rules:
 - Edit ONLY the file named in the user message
 - Do not modify or reference other files
-- SEARCH text must match the file exactly (copy indentation character-for-character)
+- SEARCH text must be copied verbatim from the supplied file content (character-for-character, including tabs)
+- Do not invent SEARCH text for code that is not already in the file
+- Prefer replacing a single function: use the entire existing function (and its comment) as SEARCH
 - Do NOT wrap output in markdown code fences (no ``` lines)
 - Make the smallest correct change"""
 
@@ -261,6 +268,26 @@ def validate_patch_scope(patch: str, allowed: set[str]) -> None:
 
 
 _FENCE_LINE_RE = re.compile(r"^```(?:diff|go|patch)?\s*$")
+_EXCERPT_MARKER_RE = re.compile(r"//\s*\.\.\.\s*(\[lines|\(rest of)", re.IGNORECASE)
+
+
+def is_invalid_go_patch_snippet(text: str) -> bool:
+    """Detect LLM hallucinations that must not be applied as mid-file patches."""
+    if not text.strip():
+        return False
+    if _EXCERPT_MARKER_RE.search(text):
+        return True
+    seen_func = False
+    for line in text.splitlines():
+        stripped = line.lstrip()
+        if stripped.startswith("func "):
+            seen_func = True
+        elif seen_func and (
+            stripped.startswith("package ")
+            or stripped.startswith("import ")
+        ):
+            return True
+    return False
 
 
 def sanitize_llm_patch_output(text: str) -> str:
@@ -302,7 +329,58 @@ def _search_variants(search: str) -> list[str]:
     spaced = search.replace("\t", "    ")
     if spaced not in variants:
         variants.append(spaced)
+    stripped = "\n".join(line.rstrip() for line in search.splitlines())
+    if stripped and stripped not in variants:
+        variants.append(stripped)
     return variants
+
+
+def _go_func_name_from_text(text: str) -> str | None:
+    match = re.search(r"func\s+(?:\([^)]*\)\s+)?(\w+)\s*\(", text)
+    return match.group(1) if match else None
+
+
+def _replace_go_function_by_name(content: str, func_name: str, replacement: str) -> str | None:
+    """Replace a Go function (and preceding // comments) when SEARCH matching fails."""
+    lines = content.splitlines(keepends=True)
+    func_pattern = re.compile(rf"^func\s+(?:\([^)]*\)\s+)?{re.escape(func_name)}\s*\(")
+    for index, line in enumerate(lines):
+        if not func_pattern.search(line):
+            continue
+        start = index
+        while start > 0 and lines[start - 1].lstrip().startswith("//"):
+            start -= 1
+        end = _go_func_end_line(lines, index)
+        new_lines = replacement.splitlines(keepends=True)
+        if not new_lines:
+            return None
+        if not new_lines[-1].endswith("\n"):
+            new_lines[-1] += "\n"
+        return "".join(lines[:start] + new_lines + lines[end + 1 :])
+    return None
+
+
+def _find_fuzzy_line_block(content: str, search: str) -> str | None:
+    search_lines = search.splitlines()
+    if not search_lines:
+        return None
+    content_lines = content.splitlines(keepends=True)
+    variants = [_search_variants(search)[0]]
+    for variant in _search_variants(search)[1:]:
+        variants.append(variant)
+    for candidate in variants:
+        candidate_lines = candidate.splitlines()
+        if len(candidate_lines) > len(content_lines):
+            continue
+        for start in range(len(content_lines) - len(candidate_lines) + 1):
+            if all(
+                content_lines[start + offset].rstrip() == candidate_lines[offset].rstrip()
+                for offset in range(len(candidate_lines))
+            ):
+                matched = "".join(content_lines[start : start + len(candidate_lines)])
+                if content.count(matched) == 1:
+                    return matched
+    return None
 
 
 def _resolve_search_match(content: str, search: str) -> str | None:
@@ -310,7 +388,7 @@ def _resolve_search_match(content: str, search: str) -> str | None:
         count = content.count(candidate)
         if count == 1:
             return candidate
-    return None
+    return _find_fuzzy_line_block(content, search)
 
 
 def parse_search_replace_blocks(text: str) -> list[tuple[str, str]]:
@@ -333,17 +411,40 @@ def parse_search_replace_blocks(text: str) -> list[tuple[str, str]]:
     return blocks
 
 
+def _apply_search_replace_block(content: str, search: str, replace: str) -> str:
+    if is_invalid_go_patch_snippet(replace):
+        msg = "REPLACE block contains invalid Go (package/import/excerpt markers)"
+        raise CoderError(msg)
+    if is_invalid_go_patch_snippet(search):
+        msg = "SEARCH block contains hallucinated context (package/import/excerpt markers)"
+        raise CoderError(msg)
+
+    matched = _resolve_search_match(content, search)
+    if matched is not None:
+        adjusted_replace = replace
+        if matched != search:
+            adjusted_replace = (
+                _indent_spaces_to_tabs(replace)
+                if "\t" in matched and "    " in replace
+                else replace
+            )
+        return content.replace(matched, adjusted_replace, 1)
+
+    func_name = _go_func_name_from_text(replace) or _go_func_name_from_text(search)
+    if func_name and "func " in replace:
+        replaced = _replace_go_function_by_name(content, func_name, replace)
+        if replaced is not None:
+            return replaced
+
+    count = content.count(search)
+    msg = f"SEARCH block must match exactly once (found {count} matches)"
+    raise CoderError(msg)
+
+
 def apply_search_replace_blocks(content: str, blocks: list[tuple[str, str]]) -> str:
     updated = content
     for search, replace in blocks:
-        matched = _resolve_search_match(updated, search)
-        if matched is None:
-            count = updated.count(search)
-            msg = f"SEARCH block must match exactly once (found {count} matches)"
-            raise CoderError(msg)
-        if matched != search:
-            replace = _indent_spaces_to_tabs(replace) if "\t" in matched and "    " in replace else replace
-        updated = updated.replace(matched, replace, 1)
+        updated = _apply_search_replace_block(updated, search, replace)
     return updated
 
 
@@ -417,11 +518,68 @@ def normalize_llm_patch(
     )
 
 
+def _production_go_files(plan: FixPlan) -> list[str]:
+    return [
+        path
+        for path in plan.files
+        if path.endswith(".go") and not normalize_file_path(path).endswith("_test.go")
+    ]
+
+
+def _plan_requires_existing_test_edits(plan: FixPlan) -> bool:
+    """True when plan steps ask to change existing tests, not only add new ones."""
+    return bool(_EDIT_EXISTING_TEST_RE.search(plan_narrative_text(plan.steps)))
+
+
+def file_needs_coder_patch(
+    plan: FixPlan,
+    file_path: str,
+    context_bundle: ContextBundle | None = None,
+) -> bool:
+    """Return whether the coder should emit a patch for this planned file."""
+    norm = normalize_file_path(file_path)
+    if not norm.endswith("_test.go"):
+        return True
+
+    narrative = plan_narrative_text(
+        plan.steps,
+        plan.acceptance_criteria,
+        plan.test_commands,
+    )
+    bundle_content = ""
+    if context_bundle is not None:
+        for entry in context_bundle.files:
+            if normalize_file_path(entry.path) == norm:
+                bundle_content = entry.content
+                break
+
+    if not test_file_relevant_for_enrichment(norm, bundle_content, narrative):
+        return False
+
+    production_files = _production_go_files(plan)
+    if production_files and not _plan_requires_existing_test_edits(plan):
+        return False
+
+    return True
+
+
+def _steps_for_file(steps: list[str], file_path: str) -> list[str]:
+    norm = normalize_file_path(file_path)
+    basename = Path(norm).name
+    specific = [step for step in steps if basename in step or norm in step]
+    if specific:
+        return specific
+    if norm.endswith("_test.go"):
+        return [step for step in steps if "_test.go" in step or " test " in step.lower()]
+    return list(steps)
+
+
 def plan_slice_for_file(plan: FixPlan, file_path: str) -> PlanSlice:
     assert_file_in_plan(file_path, plan)
+    normalized = normalize_file_path(file_path)
     return PlanSlice(
-        file_path=normalize_file_path(file_path),
-        steps=list(plan.steps),
+        file_path=normalized,
+        steps=_steps_for_file(plan.steps, normalized),
         test_commands=list(plan.test_commands),
         acceptance_criteria=list(plan.acceptance_criteria),
     )
@@ -626,42 +784,70 @@ def generate_file_patch(
         plan_slice,
         settings.coder_max_file_chars,
     )
-    messages = build_coder_messages(
-        issue,
-        plan_slice,
-        prompt_content,
-        bundle_entry,
-        dependency_context=dependency_context,
-        file_excerpt=file_excerpt,
-    )
 
-    try:
+    def _attempt_patch(
+        content_for_prompt: str,
+        *,
+        use_excerpt: bool,
+        correction: str | None,
+    ) -> FilePatch:
+        messages = build_coder_messages(
+            issue,
+            plan_slice,
+            content_for_prompt,
+            bundle_entry,
+            correction=correction,
+            dependency_context=dependency_context,
+            file_excerpt=use_excerpt,
+        )
         content = complete(messages, tier="fast", settings=settings)
         if not content:
             raise CoderError("LLM completion failed")
-        file_patch = normalize_llm_patch(normalized_path, original, content, plan)
+        return normalize_llm_patch(normalized_path, original, content, plan)
+
+    correction_hint = (
+        "Return SEARCH/REPLACE blocks or a unified diff for this file only. "
+        "Copy the entire existing function from the file as SEARCH (verbatim, including tabs). "
+        "Do not invent SEARCH text for code that is not already present."
+    )
+    try:
+        file_patch = _attempt_patch(prompt_content, use_excerpt=file_excerpt, correction=None)
         log.info("Coder patch generated for %s (%s)", normalized_path, file_patch.format)
         return file_patch
     except CoderError as first_error:
         log.warning("Coder first attempt failed for %s: %s", normalized_path, first_error)
-        retry_messages = build_coder_messages(
-            issue,
-            plan_slice,
-            prompt_content,
-            bundle_entry,
-            correction=(
-                f"Previous output was invalid: {first_error}. "
-                "Return SEARCH/REPLACE blocks or a unified diff for this file only."
-            ),
-            dependency_context=dependency_context,
-            file_excerpt=file_excerpt,
-        )
-        content = complete(retry_messages, tier="fast", settings=settings)
-        if not content:
-            raise CoderError(f"Coder failed after retry for {normalized_path}") from first_error
         try:
-            return normalize_llm_patch(normalized_path, original, content, plan)
+            file_patch = _attempt_patch(
+                prompt_content,
+                use_excerpt=file_excerpt,
+                correction=f"Previous output was invalid: {first_error}. {correction_hint}",
+            )
+            log.info("Coder patch generated for %s on retry (%s)", normalized_path, file_patch.format)
+            return file_patch
         except CoderError as retry_error:
+            if file_excerpt and "SEARCH block" in str(retry_error):
+                log.warning(
+                    "Coder retry failed for %s with excerpt; retrying with full file",
+                    normalized_path,
+                )
+                try:
+                    file_patch = _attempt_patch(
+                        original,
+                        use_excerpt=False,
+                        correction=(
+                            f"Previous output was invalid: {retry_error}. {correction_hint}"
+                        ),
+                    )
+                    log.info(
+                        "Coder patch generated for %s with full file (%s)",
+                        normalized_path,
+                        file_patch.format,
+                    )
+                    return file_patch
+                except CoderError as full_file_error:
+                    raise CoderError(
+                        f"Coder failed after retry for {normalized_path}: {full_file_error}"
+                    ) from full_file_error
             raise CoderError(
                 f"Coder failed after retry for {normalized_path}: {retry_error}"
             ) from retry_error
@@ -722,9 +908,25 @@ def build_proposed_patch(
     completed: dict[str, FilePatch] = {}
 
     for wave_index, wave in enumerate(waves):
-        log.info("Coder wave %d: %d files (parallel)", wave_index, len(wave))
-        if len(wave) == 1:
-            path = wave[0]
+        patch_targets = [
+            path for path in wave if file_needs_coder_patch(plan, path, context_bundle)
+        ]
+        skipped = [path for path in wave if path not in patch_targets]
+        for path in skipped:
+            log.info(
+                "Coder skipping %s (test file listed for context; production fix is primary)",
+                path,
+            )
+        if not patch_targets:
+            continue
+        log.info(
+            "Coder wave %d: %d files (parallel)%s",
+            wave_index,
+            len(patch_targets),
+            f", {len(skipped)} skipped" if skipped else "",
+        )
+        if len(patch_targets) == 1:
+            path = patch_targets[0]
             completed[path] = _generate_file_patch_for_wave(
                 repo_path,
                 issue,
@@ -737,7 +939,7 @@ def build_proposed_patch(
             )
             continue
 
-        max_workers = max(1, min(settings.coder_max_workers, len(wave)))
+        max_workers = max(1, min(settings.coder_max_workers, len(patch_targets)))
         with ThreadPoolExecutor(max_workers=max_workers) as pool:
             futures = {
                 pool.submit(
@@ -751,7 +953,7 @@ def build_proposed_patch(
                     dict(completed),
                     log,
                 ): path
-                for path in wave
+                for path in patch_targets
             }
             try:
                 for future in as_completed(futures):

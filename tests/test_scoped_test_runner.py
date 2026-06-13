@@ -12,6 +12,7 @@ from go_agent.fixer import parse_failing_packages
 from go_agent.planner import FixPlan
 from go_agent.test_runner import (
     TestRunError,
+    derive_compile_check_commands,
     derive_scoped_test_commands,
     run_tests,
     tokenize_test_command,
@@ -41,6 +42,24 @@ def _plan() -> FixPlan:
         test_commands=["go test -race ./... -count=1"],
         acceptance_criteria=["pass"],
     )
+
+
+COMPILE_FAIL_OUTPUT = (
+    "FAIL\tgithub.com/go-playground/validator/v10 [setup failed]\n"
+    "./baked_in.go:1715:1: syntax error: non-declaration statement outside function body\n"
+)
+
+
+def test_derive_compile_check_commands(tmp_path):
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    (repo_path / "baked_in.go").write_text("package validator\n", encoding="utf-8")
+
+    derived = derive_compile_check_commands(COMPILE_FAIL_OUTPUT, repo_path)
+    assert len(derived) == 1
+    argv, cwd = derived[0]
+    assert argv == ["go", "build", "./..."]
+    assert cwd == repo_path
 
 
 def test_parse_failing_packages():

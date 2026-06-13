@@ -35,12 +35,17 @@ When the issue describes behavior changes, validation semantics, bug fixes, or A
 - Prefer fixing production code to match existing tests unless the issue explicitly asks to change tests
 - Do not list test files for pure refactors or docs with no behavior impact
 
-Be specific to the issue and supplied code context. Prefer the smallest correct change."""
+Be specific to the issue and supplied code context. Prefer the smallest correct change.
+
+files must use repository-relative paths exactly as listed in the context bundle.
+Do not invent paths from issue stack traces or local clone folder names
+(e.g. validator-master/foo.go). If unsure, pick production .go files from the bundle."""
 
 _MAX_ISSUE_BODY_CHARS = 3000
 _MAX_BUNDLE_ENTRY_CHARS = 2000
 _DEFAULT_MAX_CONTEXT_CHARS = 12000
 _TEST_FUNC_RE = re.compile(r"func\s+(Test\w+)\s*\(")
+_PLAN_TEST_NAME_RE = re.compile(r"\bTest[A-Z]\w*\b")
 _BEHAVIOR_CHANGE_RE = re.compile(
     r"\b(valid(?:ation|ate)?|bug|fail(?:ure|s|ed)?|incorrect|edge\s*case|"
     r"panic|regression|broken|unexpected|should\s+not|does\s+not\s+work)\b",
@@ -158,6 +163,111 @@ class FixPlan(BaseModel):
         )
         object.__setattr__(self, "file_dependencies", normalized_deps)
         return self
+
+
+def _bundle_path_set(context_bundle: ContextBundle) -> set[str]:
+    return {normalize_file_path(entry.path) for entry in context_bundle.files}
+
+
+def _plan_file_candidates(path: str) -> list[str]:
+    """Expand a planned path into repo-relative candidates (strip clone-folder prefixes)."""
+    norm = normalize_file_path(path)
+    candidates: list[str] = []
+    seen: set[str] = set()
+
+    def add(candidate: str) -> None:
+        cleaned = normalize_file_path(candidate)
+        if cleaned and cleaned not in seen:
+            seen.add(cleaned)
+            candidates.append(cleaned)
+
+    add(norm)
+    parts = Path(norm).parts
+    if len(parts) > 1:
+        if parts[0].endswith("-master") or parts[0] in {"validator", "gin", "cobra"}:
+            add(str(Path(*parts[1:])))
+        add(parts[-1])
+    return candidates
+
+
+def _file_exists_in_repo(repo_path: Path, path: str) -> bool:
+    return (repo_path / path).is_file()
+
+
+def _looks_like_clone_folder_path(path: str) -> bool:
+    parts = Path(normalize_file_path(path)).parts
+    return len(parts) > 1 and (
+        parts[0].endswith("-master") or parts[0] in {"validator", "gin", "cobra"}
+    )
+
+
+def sanitize_plan_file_paths(
+    files: list[str],
+    *,
+    repo_path: Path | None = None,
+    context_bundle: ContextBundle | None = None,
+) -> list[str]:
+    """Resolve plan paths to repo-relative files; drop clone-folder hallucinations."""
+    bundle_paths = _bundle_path_set(context_bundle) if context_bundle is not None else set()
+    resolved: list[str] = []
+    seen: set[str] = set()
+
+    for path in files:
+        matched: str | None = None
+        for candidate in _plan_file_candidates(path):
+            in_bundle = candidate in bundle_paths
+            on_disk = repo_path is not None and _file_exists_in_repo(repo_path, candidate)
+            if in_bundle or on_disk:
+                matched = candidate
+                break
+
+        if matched is not None:
+            if matched not in seen:
+                seen.add(matched)
+                resolved.append(matched)
+            continue
+
+        if _looks_like_clone_folder_path(path):
+            continue
+
+        norm = normalize_file_path(path)
+        if norm and norm not in seen:
+            seen.add(norm)
+            resolved.append(norm)
+
+    return resolved
+
+
+def _infer_production_files_from_bundle(
+    payload: dict,
+    context_bundle: ContextBundle,
+) -> list[str]:
+    """Pick production bundle files whose content matches plan narrative symbols."""
+    narrative = plan_narrative_text(
+        payload.get("steps") or [],
+        payload.get("acceptance_criteria") or [],
+        payload.get("test_commands") or [],
+    ).lower()
+    if not narrative.strip():
+        return []
+
+    inferred: list[str] = []
+    for entry in context_bundle.files:
+        norm = normalize_file_path(entry.path)
+        if not norm.endswith(".go") or norm.endswith("_test.go"):
+            continue
+        if norm.startswith("_examples/"):
+            continue
+        content_lower = entry.content.lower()
+        if any(token in content_lower for token in ("hostname_rfc1123", "ishostname")):
+            if "hostname" in narrative or "rfc1123" in narrative:
+                inferred.append(entry.path)
+                continue
+        for token in re.findall(r"\b(is[A-Z]\w+|Test[A-Z]\w*)\b", narrative):
+            if token.lower() in content_lower:
+                inferred.append(entry.path)
+                break
+    return inferred
 
 
 def _bundle_excerpt(context_bundle: ContextBundle, *, max_chars: int) -> str:
@@ -353,6 +463,11 @@ def build_planner_messages(
     )
     if known_tests:
         user_parts.append(known_tests)
+    if context_bundle.files:
+        allowed = ", ".join(
+            normalize_file_path(entry.path) for entry in context_bundle.files[:25]
+        )
+        user_parts.append(f"Allowed file paths (from context bundle): {allowed}")
     if skill_section:
         user_parts.append(skill_section)
     if correction:
@@ -394,6 +509,88 @@ def _validate_fix_plan(payload: dict, issue: IssueContext) -> FixPlan:
         raise PlanError(msg) from exc
 
 
+def plan_narrative_text(*parts: list[str] | str) -> str:
+    """Join plan steps, criteria, and commands into searchable narrative text."""
+    chunks: list[str] = []
+    for part in parts:
+        if isinstance(part, str):
+            chunks.append(part)
+        else:
+            chunks.extend(str(item) for item in part if item)
+    return "\n".join(chunks)
+
+
+def test_names_in_narrative(text: str) -> set[str]:
+    return set(_PLAN_TEST_NAME_RE.findall(text))
+
+
+def test_file_relevant_for_enrichment(
+    test_path: str,
+    bundle_content: str,
+    narrative: str,
+) -> bool:
+    """True when a context-bundle test file is linked to the plan narrative."""
+    norm = normalize_file_path(test_path)
+    basename = Path(norm).name
+    haystack = narrative.lower()
+    if basename.lower() in haystack or norm.lower() in haystack:
+        return True
+    for name in test_names_in_narrative(narrative):
+        if name in bundle_content:
+            return True
+    return False
+
+
+def _stem_test_path(production_path: str) -> str:
+    norm = normalize_file_path(production_path)
+    return normalize_file_path(str(Path(norm).with_name(f"{Path(norm).stem}_test.go")))
+
+
+def collect_enrich_test_additions(
+    files: list[str],
+    context_bundle: ContextBundle,
+    payload: dict,
+) -> list[str]:
+    """Add issue-relevant *_test.go files from the context bundle only."""
+    narrative = plan_narrative_text(
+        payload.get("steps") or [],
+        payload.get("acceptance_criteria") or [],
+        payload.get("test_commands") or [],
+    )
+    normalized_files = {normalize_file_path(path) for path in files}
+    additions: list[str] = []
+    seen: set[str] = set()
+
+    def add(path: str) -> None:
+        norm = normalize_file_path(path)
+        if norm in normalized_files or norm in seen:
+            return
+        seen.add(norm)
+        additions.append(path)
+
+    bundle_by_path = {
+        normalize_file_path(entry.path): entry for entry in context_bundle.files
+    }
+
+    for entry in context_bundle.files:
+        norm = normalize_file_path(entry.path)
+        if not norm.endswith("_test.go"):
+            continue
+        if test_file_relevant_for_enrichment(entry.path, entry.content, narrative):
+            add(entry.path)
+
+    for path in files:
+        norm = normalize_file_path(path)
+        if not norm.endswith(".go") or norm.endswith("_test.go"):
+            continue
+        stem_test = _stem_test_path(norm)
+        entry = bundle_by_path.get(stem_test)
+        if entry is not None:
+            add(entry.path)
+
+    return additions
+
+
 def enrich_fix_plan_payload(
     payload: dict,
     *,
@@ -403,6 +600,25 @@ def enrich_fix_plan_payload(
     """Sanitize file_dependencies and inject related test files before validation."""
     enriched = dict(payload)
     files = [str(item).strip() for item in (enriched.get("files") or []) if str(item).strip()]
+    files = sanitize_plan_file_paths(
+        files,
+        repo_path=repo_path,
+        context_bundle=context_bundle,
+    )
+    if not files:
+        inferred = _infer_production_files_from_bundle(enriched, context_bundle)
+        files = sanitize_plan_file_paths(
+            inferred,
+            repo_path=repo_path,
+            context_bundle=context_bundle,
+        )
+    if not files:
+        allowed = sorted(_bundle_path_set(context_bundle))
+        msg = (
+            "planned files are not present in the repository or context bundle; "
+            f"use paths from the context bundle such as: {', '.join(allowed[:8])}"
+        )
+        raise PlanError(msg)
     normalized_files = {normalize_file_path(path) for path in files}
 
     cleaned_deps: dict[str, list[str]] = {}
@@ -427,37 +643,7 @@ def enrich_fix_plan_payload(
             cleaned_deps[canonical_key] = cleaned
     enriched["file_dependencies"] = cleaned_deps
 
-    known_test_files: set[str] = set()
-    path_by_norm: dict[str, str] = {}
-    for entry in context_bundle.files:
-        norm = normalize_file_path(entry.path)
-        path_by_norm[norm] = entry.path
-        if norm.endswith("_test.go"):
-            known_test_files.add(norm)
-    if repo_path is not None:
-        for test_file in repo_path.rglob("*_test.go"):
-            norm = normalize_file_path(test_file.relative_to(repo_path).as_posix())
-            known_test_files.add(norm)
-            path_by_norm.setdefault(norm, norm)
-
-    additions: list[str] = []
-    seen_additions: set[str] = set()
-    for path in files:
-        norm = normalize_file_path(path)
-        if not norm.endswith(".go") or norm.endswith("_test.go"):
-            continue
-        stem_test = normalize_file_path(
-            str(Path(norm).with_name(f"{Path(norm).stem}_test.go"))
-        )
-        for candidate in sorted(known_test_files):
-            if candidate in normalized_files or candidate in seen_additions:
-                continue
-            same_dir = Path(norm).parent == Path(candidate).parent
-            if candidate == stem_test or same_dir:
-                seen_additions.add(candidate)
-                normalized_files.add(candidate)
-                additions.append(path_by_norm.get(candidate, candidate))
-
+    additions = collect_enrich_test_additions(files, context_bundle, enriched)
     enriched["files"] = files + additions
     return enriched
 

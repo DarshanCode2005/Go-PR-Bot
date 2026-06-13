@@ -175,6 +175,32 @@ def _resolve_package_dir(repo_path: Path, import_path: str) -> Path | None:
     return Path(dir_text)
 
 
+def derive_compile_check_commands(
+    test_output: str,
+    repo_path: Path,
+) -> list[tuple[list[str], Path]]:
+    """Derive fast go build commands when failures are compile-time, not assertions."""
+    from go_agent.failure_parse import is_compile_failure, parse_compile_error_files
+
+    if not is_compile_failure(test_output):
+        return []
+
+    error_files = parse_compile_error_files(test_output)
+    package_dirs: list[Path] = []
+    seen_dirs: set[Path] = set()
+
+    for path in error_files:
+        package_dir = (repo_path / path).parent.resolve()
+        if package_dir.is_dir() and package_dir not in seen_dirs:
+            seen_dirs.add(package_dir)
+            package_dirs.append(package_dir)
+
+    if not package_dirs:
+        return [(["go", "build", "./..."], repo_path)]
+
+    return [(["go", "build", "./..."], package_dir) for package_dir in package_dirs]
+
+
 def derive_scoped_test_commands(
     test_output: str,
     repo_path: Path,
@@ -386,8 +412,26 @@ def run_tests(
             mode="full",
         )
 
+    prior_output = prior_test_output or ""
+    compile_checks = derive_compile_check_commands(prior_output, repo_path)
+    if compile_checks:
+        compile_argv = [item[0] for item in compile_checks]
+        compile_cwds = [item[1] for item in compile_checks]
+        return run_test_commands(
+            repo_path,
+            compile_argv,
+            timeout=settings.test_timeout,
+            logger=logger,
+            source=source,
+            plan_commands=plan_commands,
+            command_cwds=compile_cwds,
+            mode="scoped",
+            scoped_from_failure=True,
+            phase_labels=["compile check"] * len(compile_argv),
+        )
+
     derived = derive_scoped_test_commands(
-        prior_test_output or "",
+        prior_output,
         repo_path,
         base_commands=full_commands,
     )

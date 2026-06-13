@@ -81,6 +81,8 @@ def _clear_llm_env(monkeypatch: pytest.MonkeyPatch) -> None:
         "XAI_API_KEY",
         "GEMINI_API_KEY",
         "GOOGLE_API_KEY",
+        "NVIDIA_NIM_API_KEY",
+        "NVIDIA_NIM_API_BASE",
     ):
         monkeypatch.delenv(key, raising=False)
 
@@ -94,6 +96,7 @@ def test_complete_returns_none_without_api_keys(monkeypatch, tmp_path):
         groq_api_key=None,
         xai_api_key=None,
         gemini_api_key=None,
+        nvidia_nim_api_key=None,
     )
     transport = RecordingTransport(["ok"])
     set_completion_transport(transport)
@@ -102,6 +105,68 @@ def test_complete_returns_none_without_api_keys(monkeypatch, tmp_path):
 
     assert out is None
     assert not transport.calls
+
+
+def test_llm_available_with_nvidia_nim_key(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("NVIDIA_NIM_API_KEY", "nvapi-test-key")
+    settings = Settings(
+        openai_api_key=None,
+        anthropic_api_key=None,
+        groq_api_key=None,
+        xai_api_key=None,
+        gemini_api_key=None,
+    )
+    assert llm_available(settings) is True
+    assert settings.nvidia_nim_api_key == "nvapi-test-key"
+
+
+def test_nvidia_nim_api_base_strips_trailing_slash(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("NVIDIA_NIM_API_BASE", "https://integrate.api.nvidia.com/v1/")
+    settings = Settings()
+    assert settings.nvidia_nim_api_base == "https://integrate.api.nvidia.com/v1"
+
+
+def test_apply_llm_credentials_sets_nvidia_nim_env(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    _clear_llm_env(monkeypatch)
+    settings = Settings(
+        openai_api_key=None,
+        anthropic_api_key=None,
+        groq_api_key=None,
+        xai_api_key=None,
+        gemini_api_key=None,
+        nvidia_nim_api_key="nvapi-test-key",
+        nvidia_nim_api_base="https://integrate.api.nvidia.com/v1/",
+    )
+    transport = RecordingTransport(["ok"])
+    set_completion_transport(transport)
+
+    complete([{"role": "user", "content": "hello"}], settings=settings)
+
+    assert os.environ.get("NVIDIA_NIM_API_KEY") == "nvapi-test-key"
+    assert os.environ.get("NVIDIA_NIM_API_BASE") == "https://integrate.api.nvidia.com/v1"
+
+
+def test_complete_uses_nvidia_nim_model(monkeypatch):
+    monkeypatch.setenv("NVIDIA_NIM_API_KEY", "nvapi-test-key")
+    settings = Settings(
+        openai_api_key=None,
+        anthropic_api_key=None,
+        groq_api_key=None,
+        xai_api_key=None,
+        gemini_api_key=None,
+        model_fast="nvidia_nim/meta/llama3-8b-instruct",
+        model_strong="nvidia_nim/meta/llama3-70b-instruct",
+    )
+    transport = RecordingTransport(["ok"])
+    set_completion_transport(transport)
+
+    out = complete([{"role": "user", "content": "hello"}], tier="strong", settings=settings)
+
+    assert out == "ok"
+    assert transport.calls[0]["model"] == "nvidia_nim/meta/llama3-70b-instruct"
 
 
 def test_llm_available_with_gemini_key(monkeypatch, tmp_path):

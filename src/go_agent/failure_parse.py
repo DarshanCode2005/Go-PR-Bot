@@ -11,6 +11,14 @@ from go_agent.repo_search import RipgrepNotFoundError, RipgrepError, search_repo
 from go_agent.utils import normalize_file_path
 
 GO_FILE_RE = re.compile(r"(?:\./)?([\w./-]+\.go)")
+_COMPILE_ERROR_MARKERS = (
+    "syntax error:",
+    "build failed",
+    "setup failed",
+    "expected declaration",
+    "missing import path",
+    "imports must appear before",
+)
 _FAIL_TEST = re.compile(r"--- FAIL:\s+(\w+)", re.MULTILINE)
 _FAIL_TEST_ALT = re.compile(r"^\s*FAIL:\s+(\w+)", re.MULTILINE)
 _FAIL_PACKAGE = re.compile(r"^FAIL\t(\S+)", re.MULTILINE)
@@ -40,6 +48,26 @@ def parse_failing_packages(test_output: str) -> list[str]:
             seen.add(path)
             packages.append(path)
     return packages
+
+
+def is_compile_failure(output: str) -> bool:
+    """True when test output indicates the package does not compile."""
+    if not output.strip():
+        return False
+    lower = output.lower()
+    if any(marker in lower for marker in _COMPILE_ERROR_MARKERS):
+        return True
+    if "--- FAIL:" not in output and ("build failed" in lower or "setup failed" in lower):
+        return True
+    return False
+
+
+def parse_compile_error_files(output: str) -> list[str]:
+    """Return Go files from compile errors, production sources before tests."""
+    files = parse_referenced_go_files(output)
+    production = [path for path in files if not path.endswith("_test.go")]
+    tests = [path for path in files if path.endswith("_test.go")]
+    return production + tests
 
 
 def parse_referenced_go_files(output: str) -> list[str]:
@@ -99,6 +127,8 @@ def resolve_test_files(
 
 __all__ = [
     "GO_FILE_RE",
+    "is_compile_failure",
+    "parse_compile_error_files",
     "parse_failing_packages",
     "parse_failing_tests",
     "parse_referenced_go_files",

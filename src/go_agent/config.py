@@ -64,6 +64,8 @@ class Settings(BaseSettings):
         default=None,
         validation_alias=AliasChoices("GEMINI_API_KEY", "GOOGLE_API_KEY"),
     )
+    nvidia_nim_api_key: str | None = Field(default=None, validation_alias="NVIDIA_NIM_API_KEY")
+    nvidia_nim_api_base: str | None = Field(default=None, validation_alias="NVIDIA_NIM_API_BASE")
     github_token: str | None = Field(default=None, validation_alias="GITHUB_TOKEN")
     model_fast: str = "gpt-4o-mini"
     model_strong: str = "gpt-4o"
@@ -78,6 +80,16 @@ class Settings(BaseSettings):
             msg = f"invalid log level {value!r}; use DEBUG, INFO, WARNING, or ERROR"
             raise ValueError(msg)
         return level
+
+    @field_validator("nvidia_nim_api_base", mode="before")
+    @classmethod
+    def normalize_nvidia_nim_api_base(cls, value: object) -> str | None:
+        if value is None:
+            return None
+        text = str(value).strip()
+        if not text:
+            return None
+        return text.rstrip("/")
 
     @field_validator("work_dir", "artifacts_dir", mode="before")
     @classmethod

@@ -26,6 +26,8 @@ from go_agent.llm_client import llm_available
 from go_agent.planner import FixPlan
 from go_agent.failure_parse import (
     GO_FILE_RE,
+    is_compile_failure,
+    parse_compile_error_files,
     parse_failing_packages,
     parse_failing_tests,
     parse_referenced_go_files,
@@ -194,6 +196,35 @@ def _prioritize_plan_files(plan: FixPlan, fix_context: FixContext) -> list[str]:
     return ordered or list(plan.files)
 
 
+def _filter_compile_failure_files(
+    target_files: list[str],
+    fix_context: FixContext,
+) -> list[str]:
+    """On compile errors in production code, avoid widening scope to test files."""
+    if fix_context.failure_source != "test" or not is_compile_failure(fix_context.test_output):
+        return target_files
+
+    error_files = parse_compile_error_files(fix_context.test_output)
+    production_errors = {
+        normalize_file_path(path)
+        for path in error_files
+        if not path.endswith("_test.go")
+    }
+    if not production_errors:
+        return target_files
+
+    filtered = [
+        path
+        for path in target_files
+        if not normalize_file_path(path).endswith("_test.go")
+    ]
+    for path in target_files:
+        norm = normalize_file_path(path)
+        if norm in production_errors and path not in filtered:
+            filtered.insert(0, path)
+    return filtered or list(target_files)
+
+
 def expand_fix_files(
     plan: FixPlan,
     fix_context: FixContext,
@@ -254,8 +285,11 @@ def expand_fix_files(
             break
         result.append(path)
 
+    result = _filter_compile_failure_files(result, fix_context)
     added = [path for path in result if normalize_file_path(path) not in plan_normalized]
     reason_parts: list[str] = []
+    if fix_context.failure_source == "test" and is_compile_failure(fix_context.test_output):
+        reason_parts.append("Compile failure: limiting fix scope to production sources")
     if failing_tests:
         reason_parts.append(
             f"Failing tests: {', '.join(failing_tests)}"
@@ -299,8 +333,30 @@ def build_corrective_patch(
     if not expansion.target_files:
         raise FixError("plan.files is empty; nothing to fix")
 
+    from go_agent.coder import file_needs_coder_patch
+
+    fix_targets = [
+        path
+        for path in expansion.target_files
+        if file_needs_coder_patch(plan, path, context_bundle)
+    ]
+    if fix_context.failure_source == "test" and is_compile_failure(fix_context.test_output):
+        production_errors = {
+            normalize_file_path(path)
+            for path in parse_compile_error_files(fix_context.test_output)
+            if not path.endswith("_test.go")
+        }
+        if production_errors:
+            fix_targets = [
+                path
+                for path in fix_targets
+                if not normalize_file_path(path).endswith("_test.go")
+            ]
+    if not fix_targets:
+        raise FixError("no eligible files to fix after compile-failure scope filtering")
+
     failure_text = _failure_summary(fix_context, scope=expansion)
-    narrowed_plan = plan.model_copy(update={"files": expansion.target_files})
+    narrowed_plan = plan.model_copy(update={"files": fix_targets})
     waves = schedule_coder_waves(narrowed_plan)
     completed: dict[str, FilePatch] = {}
 
@@ -347,7 +403,7 @@ def build_corrective_patch(
                     raise
                 raise FixError(str(exc)) from exc
 
-    file_patches = [completed[path] for path in expansion.target_files if path in completed]
+    file_patches = [completed[path] for path in fix_targets if path in completed]
     combined = combine_file_patches(file_patches)
     if not combined.strip():
         raise FixError("fix agent produced empty patch")

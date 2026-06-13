@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import subprocess
 import tempfile
 from collections import defaultdict
 from pathlib import Path
@@ -63,6 +64,26 @@ def _reset_file(repo_path: Path, path: str, content: str) -> None:
     full_path = repo_path / path
     full_path.parent.mkdir(parents=True, exist_ok=True)
     full_path.write_text(content, encoding="utf-8")
+
+
+def _verify_go_build(repo_path: Path, *, timeout: int = 60) -> None:
+    """Ensure patched tree compiles before exporting the resolved diff."""
+    try:
+        completed = subprocess.run(
+            ["go", "build", "./..."],
+            cwd=repo_path,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            check=False,
+        )
+    except (subprocess.TimeoutExpired, OSError) as exc:
+        raise IntegratorError(f"go build verification failed: {exc}") from exc
+    if completed.returncode != 0:
+        stderr = (completed.stderr or completed.stdout or "").strip()
+        raise IntegratorError(
+            f"go build failed after applying patches: {stderr[:2000]}"
+        )
 
 
 def try_apply_patch(repo_path: Path, patch: str) -> None:
@@ -236,6 +257,8 @@ def integrate_file_patches(
                     files_touched.append(path)
                 while index < len(ordered) and normalize_file_path(ordered[index].path) == path_key:
                     index += 1
+
+        _verify_go_build(repo_path)
 
         with tempfile.NamedTemporaryFile(
             mode="w",

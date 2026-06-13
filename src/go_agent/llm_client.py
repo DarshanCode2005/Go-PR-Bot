@@ -32,6 +32,7 @@ def llm_available(settings: Settings) -> bool:
         or settings.groq_api_key
         or settings.xai_api_key
         or settings.gemini_api_key
+        or settings.nvidia_nim_api_key
     )
 
 
@@ -44,6 +45,8 @@ def _apply_llm_credentials(settings: Settings) -> None:
         "XAI_API_KEY": settings.xai_api_key,
         "GEMINI_API_KEY": settings.gemini_api_key,
         "GOOGLE_API_KEY": settings.gemini_api_key,
+        "NVIDIA_NIM_API_KEY": settings.nvidia_nim_api_key,
+        "NVIDIA_NIM_API_BASE": settings.nvidia_nim_api_base,
     }
     for env_name, value in mapping.items():
         if value and not os.environ.get(env_name):
